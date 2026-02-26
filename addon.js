@@ -265,7 +265,13 @@ async function enrichAndMapItems(results, stremioType, tmdbType, allowFuture = f
         let posterUrl = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null;
         
         if (config.topStreamingKey) {
-            posterUrl = `https://api.top-streaming.stream/${config.topStreamingKey}/tmdb/poster-default/${item.id}.jpg`;
+            if (imdbId) {
+                const imdbStr = String(imdbId);
+                const imdbForTopStreaming = imdbStr.toLowerCase().startsWith("tt") ? imdbStr : `tt${imdbStr}`;
+                posterUrl = `https://api.top-streaming.stream/${config.topStreamingKey}/imdb/poster-default/${imdbForTopStreaming}.jpg`;
+            } else {
+                posterUrl = `https://api.top-streaming.stream/${config.topStreamingKey}/tmdb/poster-default/${item.id}.jpg`;
+            }
         }
 
         return {
@@ -765,7 +771,13 @@ async function transformToMeta(item, type) {
     let poster = item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : "";
     
     if (config.topStreamingKey) {
-        poster = `https://api.top-streaming.stream/${config.topStreamingKey}/tmdb/poster-default/${item.id}.jpg`;
+        if (imdbId) {
+            const imdbStr = String(imdbId);
+            const imdbForTopStreaming = imdbStr.toLowerCase().startsWith("tt") ? imdbStr : `tt${imdbStr}`;
+            poster = `https://api.top-streaming.stream/${config.topStreamingKey}/imdb/poster-default/${imdbForTopStreaming}.jpg`;
+        } else {
+            poster = `https://api.top-streaming.stream/${config.topStreamingKey}/tmdb/poster-default/${item.id}.jpg`;
+        }
     }
 
     // Fetch Seasons and Episodes for Series
