@@ -1091,9 +1091,18 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 
                 let metas = await enrichAndMapItems(results, type, tmdbType, false, true, seriesAvailabilityRegionForSearch);
 
-                // Fallback: if provider-region filtering removes everything, return plain TMDB search results.
-                if (isStandardSeriesSearch && metas.length === 0 && results.length > 0) {
-                    metas = await enrichAndMapItems(results, type, tmdbType, false, true, null);
+                // For standard series search, keep IT-available items first,
+                // then append missing items from plain TMDB search.
+                if (isStandardSeriesSearch && results.length > 0 && metas.length < results.length) {
+                    const metasWithoutAvailabilityFilter = await enrichAndMapItems(results, type, tmdbType, false, true, null);
+                    const seenMetaIds = new Set(metas.map(m => m.id));
+
+                    metasWithoutAvailabilityFilter.forEach(meta => {
+                        if (!seenMetaIds.has(meta.id)) {
+                            seenMetaIds.add(meta.id);
+                            metas.push(meta);
+                        }
+                    });
                 }
 
                 return { metas };
