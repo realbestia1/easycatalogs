@@ -1557,9 +1557,24 @@
             }, 450);
         }
 
+        function utf8ToBase64(value) {
+            const bytes = new TextEncoder().encode(String(value || ""));
+            let binary = "";
+            bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary);
+        }
+
+        function base64ToUtf8(value) {
+            const binary = atob(String(value || ""));
+            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
         function encodeConfigSegment(config) {
             const json = JSON.stringify(config || {});
-            return btoa(json)
+            return utf8ToBase64(json)
                 .replace(/\+/g, "-")
                 .replace(/\//g, "_")
                 .replace(/=+$/g, "");
@@ -1571,7 +1586,7 @@
             const paddedConfig = paddingLength === 0
                 ? normalizedConfig
                 : normalizedConfig + "=".repeat(4 - paddingLength);
-            return JSON.parse(atob(paddedConfig));
+            return JSON.parse(base64ToUtf8(paddedConfig));
         }
 
         function decodeConfigFromPath() {
