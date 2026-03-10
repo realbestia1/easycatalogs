@@ -115,7 +115,7 @@ function getManifestUrl(config = null) {
         : `${ADDON_URL}/manifest.json`;
 }
 
-function normalizeConfiguredCatalogNameKey(key) {
+function normalizeConfiguredCatalogEntryKey(key) {
     const rawKey = String(key || "").trim();
     if (!rawKey) return "";
 
@@ -132,10 +132,19 @@ function normalizeConfiguredCatalogNameKey(key) {
         anime_popular_series: "anime_kitsu_popular_series",
         anime_ova: "anime_kitsu_ova",
         anime_ona: "anime_kitsu_ona",
-        anime_special: "anime_kitsu_special"
+        anime_special: "anime_kitsu_special",
+        sky: "now",
+        sky_original: "now_original",
+        sky_catalog: "now_catalog",
+        sky_top10: "now_top10"
     };
 
-    const normalizedKey = legacyMap[rawKey] || rawKey;
+    return legacyMap[rawKey] || rawKey;
+}
+
+function normalizeConfiguredCatalogNameKey(key) {
+    const normalizedKey = normalizeConfiguredCatalogEntryKey(key);
+    if (!normalizedKey) return "";
     if (normalizedKey.endsWith("_original")) return normalizedKey.slice(0, -9);
     if (normalizedKey.endsWith("_catalog")) return normalizedKey.slice(0, -8);
     if (normalizedKey.endsWith("_top10")) return normalizedKey.slice(0, -6);
@@ -307,23 +316,7 @@ async function enrichAndMapItems(results, stremioType, tmdbType, config = null, 
                 }
 
                 if (tmdbType === "tv" && seriesAvailabilityRegion) {
-                    const providersCacheKey = `tmdb:watchproviders:tv:${item.id}`;
-                    let providersData = await cache.get(providersCacheKey);
-                    if (isNegativeCache(providersData)) {
-                        providersData = null;
-                    }
-                    if (!providersData) {
-                        const providersUrl = `${BASE_URL}/tv/${item.id}/watch/providers?api_key=${getTmdbApiKey(resolvedConfig)}`;
-                        const providersRes = await fetch(providersUrl);
-                        providersData = await providersRes.json();
-                        if (providersData && !providersData.status_message) {
-                            await cache.set(providersCacheKey, providersData, withTtlJitter(CACHE_TTL_SECONDS.providers));
-                        } else {
-                            await cache.set(providersCacheKey, createNegativeCache("providers_fetch_failed"), NEGATIVE_CACHE_TTL_SECONDS);
-                            providersData = null;
-                        }
-                    }
-
+                    const providersData = await fetchTmdbWatchProviders("tv", item.id, resolvedConfig);
                     const hasRegionAvailability = providersData &&
                         providersData.results &&
                         providersData.results[seriesAvailabilityRegion];
@@ -533,7 +526,7 @@ const TOP10_PROVIDER_PAGE_SLUGS = {
     hbo: "hbo-max",
     paramount: "paramount-plus",
     now: "now-tv",
-    sky: null,
+    sky: "now-tv",
     mediaset: "mediaset-infinity",
     timvision: "timvision"
 };
@@ -581,6 +574,324 @@ function normalizeKitsuId(value) {
 
     const match = rawValue.match(/^kitsu:(\d+)$/i) || rawValue.match(/^(\d+)$/);
     return match ? match[1] : null;
+}
+
+const STREAMING_PROVIDER_TYPES = ["flatrate", "ads", "free"];
+const PROVIDER_NAME_ALIASES = {
+    "NOW": "Sky Go / NOW",
+    "Sky Go": "Sky Go / NOW"
+};
+
+function normalizeProviderName(providerName) {
+    const rawProviderName = String(providerName || "").trim();
+    if (!rawProviderName) return "";
+    return PROVIDER_NAME_ALIASES[rawProviderName] || rawProviderName;
+}
+
+function getProviderRegions(providerName) {
+    const normalizedProviderName = normalizeProviderName(providerName);
+    return normalizedProviderName === "HBO Max" ? ["IT", "US"] : ["IT"];
+}
+
+function getProviderRegion(providerName) {
+    return getProviderRegions(providerName)[0];
+}
+
+function getPrimaryReleaseDate(item) {
+    return (item && (item.release_date || item.first_air_date)) || "";
+}
+
+function filterCatalogItems(results, catalogId, allowFuture = false) {
+    const today = new Date().toISOString().split("T")[0];
+    return (Array.isArray(results) ? results : []).filter(item => {
+        const date = getPrimaryReleaseDate(item);
+
+        if (!catalogId.includes("anime")) {
+            if (item.genre_ids && item.genre_ids.includes(16) && item.original_language === "ja") {
+                return false;
+            }
+        }
+
+        if (allowFuture) return !!date;
+        return !!date && date <= today;
+    });
+}
+
+function getGenreIdForTmdbType(tmdbType, genre) {
+    if (!genre) return null;
+    return tmdbType === "movie" ? MOVIE_GENRES[genre] : TV_GENRES[genre];
+}
+
+async function fetchTmdbWatchProviders(tmdbType, tmdbId, config = null) {
+    const providersCacheKey = `tmdb:watchproviders:${tmdbType}:${tmdbId}`;
+    let providersData = await cache.get(providersCacheKey);
+
+    if (isNegativeCache(providersData)) {
+        return null;
+    }
+
+    if (providersData) {
+        return providersData;
+    }
+
+    try {
+        const providersUrl = `${BASE_URL}/${tmdbType}/${tmdbId}/watch/providers?api_key=${getTmdbApiKey(config)}`;
+        const providersRes = await fetch(providersUrl);
+        providersData = await providersRes.json();
+
+        if (providersData && !providersData.status_message) {
+            await cache.set(providersCacheKey, providersData, withTtlJitter(CACHE_TTL_SECONDS.providers));
+            return providersData;
+        }
+    } catch (error) {
+        console.warn(`[Easy Catalogs] Watch providers fetch failed for ${tmdbType}:${tmdbId}:`, error.message);
+    }
+
+    await cache.set(providersCacheKey, createNegativeCache("providers_fetch_failed"), NEGATIVE_CACHE_TTL_SECONDS);
+    return null;
+}
+
+function getRegionStreamingProviderIds(providersData, region) {
+    const regionData = providersData &&
+        providersData.results &&
+        providersData.results[region];
+
+    if (!regionData) return [];
+
+    const providerIds = new Set();
+    STREAMING_PROVIDER_TYPES.forEach(bucketName => {
+        const bucketProviders = Array.isArray(regionData[bucketName]) ? regionData[bucketName] : [];
+        bucketProviders.forEach(provider => {
+            if (provider && provider.provider_id !== undefined && provider.provider_id !== null) {
+                providerIds.add(String(provider.provider_id));
+            }
+        });
+    });
+
+    return Array.from(providerIds);
+}
+
+function isExclusiveToProvider(providersData, region, providerId) {
+    const providerIds = getRegionStreamingProviderIds(providersData, region);
+    return providerIds.length === 1 && providerIds[0] === String(providerId);
+}
+
+function replaceWatchRegion(queryParams, region) {
+    if (!queryParams.includes("&watch_region=")) {
+        return `${queryParams}&watch_region=${region}`;
+    }
+
+    return queryParams.replace(/&watch_region=[A-Z]{2}/, `&watch_region=${region}`);
+}
+
+function replaceProviderQueryRegion(queryParams, region) {
+    let nextQueryParams = replaceWatchRegion(queryParams, region);
+
+    if (nextQueryParams.includes("&region=")) {
+        nextQueryParams = nextQueryParams.replace(/&region=[A-Z]{2}/, `&region=${region}`);
+    }
+
+    return nextQueryParams;
+}
+
+async function fetchTmdbPagedResults(endpoint, queryParams, options = {}) {
+    const startPage = Number.isInteger(options.startPage) ? options.startPage : 1;
+    const maxPages = Number.isInteger(options.maxPages) ? options.maxPages : 3;
+    const minItems = Number.isInteger(options.minItems) ? options.minItems : 20;
+    const itemFilter = typeof options.itemFilter === "function" ? options.itemFilter : null;
+
+    let currentPage = startPage;
+    let pagesLeft = maxPages;
+    const items = [];
+
+    while (items.length < minItems && pagesLeft > 0) {
+        const currentUrl = `${BASE_URL}/${endpoint}?${queryParams}&page=${currentPage}`;
+        console.log(`[Easy Catalogs] Fetching Page ${currentPage}: ${currentUrl}`);
+
+        try {
+            const response = await fetch(currentUrl);
+            const data = await response.json();
+            const rawResults = Array.isArray(data && data.results) ? data.results : [];
+
+            if (rawResults.length === 0) {
+                break;
+            }
+
+            const filteredResults = itemFilter
+                ? await itemFilter(rawResults, currentPage)
+                : rawResults;
+            items.push(...filteredResults);
+        } catch (error) {
+            console.error(`[Easy Catalogs] Fetch Error on page ${currentPage}:`, error);
+            break;
+        }
+
+        currentPage++;
+        pagesLeft--;
+    }
+
+    return items;
+}
+
+function sortProviderOriginalEntries(a, b) {
+    const dateA = getPrimaryReleaseDate(a.item);
+    const dateB = getPrimaryReleaseDate(b.item);
+    const dateCompare = dateB.localeCompare(dateA);
+    if (dateCompare !== 0) return dateCompare;
+
+    if (a.sourceRank !== b.sourceRank) {
+        return a.sourceRank - b.sourceRank;
+    }
+
+    return (b.item.popularity || 0) - (a.item.popularity || 0);
+}
+
+async function fetchProviderOriginalMergedResults({
+    id,
+    tmdbType,
+    providerName,
+    extra = {},
+    config = null,
+    allowFuture = false,
+    skip = 0
+}) {
+    const canonicalProviderName = normalizeProviderName(providerName);
+    const providerId = PROVIDERS[canonicalProviderName];
+    const originalSourceId = tmdbType === "movie"
+        ? COMPANY_IDS[canonicalProviderName]
+        : NETWORK_IDS[canonicalProviderName];
+
+    if (!providerId || !originalSourceId) {
+        return null;
+    }
+
+    const dateField = tmdbType === "movie" ? "primary_release_date" : "first_air_date";
+    const endpoint = tmdbType === "movie" ? "discover/movie" : "discover/tv";
+    const originalFilterName = tmdbType === "movie" ? "with_companies" : "with_networks";
+    const genreId = getGenreIdForTmdbType(tmdbType, extra.genre);
+    const today = new Date().toISOString().split("T")[0];
+    const targetCount = skip + 20;
+    const pageBudget = Math.max(4, Math.ceil(targetCount / 20) + 2);
+    const providerRegions = getProviderRegions(canonicalProviderName);
+
+    for (const region of providerRegions) {
+        let baseQueryParams = `api_key=${getTmdbApiKey(config)}&language=it-IT&sort_by=${dateField}.desc&${dateField}.lte=${today}`;
+        if (tmdbType === "movie") {
+            baseQueryParams += `&region=${region}`;
+        }
+        if (genreId) {
+            baseQueryParams += `&with_genres=${genreId}`;
+        }
+
+        const sharedProviderParams = `&with_watch_providers=${providerId}&watch_region=${region}`;
+        const originalQueryParams = `${baseQueryParams}&${originalFilterName}=${originalSourceId}${sharedProviderParams}`;
+
+        const originalItems = await fetchTmdbPagedResults(endpoint, originalQueryParams, {
+            maxPages: pageBudget,
+            minItems: targetCount,
+            itemFilter: async rawResults => filterCatalogItems(rawResults, id, allowFuture)
+        });
+        const originalIds = new Set(originalItems.map(item => String(item.id)));
+
+        const exclusiveQueryParams = `${baseQueryParams}${sharedProviderParams}`;
+        const exclusiveItems = await fetchTmdbPagedResults(endpoint, exclusiveQueryParams, {
+            maxPages: Math.max(pageBudget, 6),
+            minItems: targetCount,
+            itemFilter: async rawResults => {
+                const filteredItems = filterCatalogItems(rawResults, id, allowFuture);
+                const exclusiveCandidates = await Promise.all(filteredItems.map(async item => {
+                    if (originalIds.has(String(item.id))) {
+                        return null;
+                    }
+
+                    const providersData = await fetchTmdbWatchProviders(tmdbType, item.id, config);
+                    return isExclusiveToProvider(providersData, region, providerId) ? item : null;
+                }));
+
+                return exclusiveCandidates.filter(Boolean);
+            }
+        });
+
+        const mergedEntries = new Map();
+        originalItems.forEach(item => {
+            mergedEntries.set(String(item.id), { item, sourceRank: 0 });
+        });
+        exclusiveItems.forEach(item => {
+            const itemKey = String(item.id);
+            if (!mergedEntries.has(itemKey)) {
+                mergedEntries.set(itemKey, { item, sourceRank: 1 });
+            }
+        });
+
+        const items = Array.from(mergedEntries.values())
+            .sort(sortProviderOriginalEntries)
+            .slice(skip, skip + 20)
+            .map(entry => entry.item);
+
+        if (items.length > 0 || region === providerRegions[providerRegions.length - 1]) {
+            return { items, region };
+        }
+    }
+
+    return { items: [], region: getProviderRegion(providerName) };
+}
+
+async function fetchCatalogMetasForQuery({
+    endpoint,
+    queryParams,
+    id,
+    type,
+    tmdbType,
+    config,
+    allowFuture,
+    providerRegion = null,
+    startPage = 1,
+    maxPagesToFetch = 3
+}) {
+    let metas = [];
+    let fetchedPage = startPage;
+    let pagesLeft = maxPagesToFetch;
+
+    while (metas.length < 20 && pagesLeft > 0) {
+        const currentUrl = `${BASE_URL}/${endpoint}?${queryParams}&page=${fetchedPage}`;
+        console.log(`[Easy Catalogs] Fetching Page ${fetchedPage}: ${currentUrl}`);
+
+        try {
+            const response = await fetch(currentUrl);
+            const data = await response.json();
+
+            if (!data.results || data.results.length === 0) break;
+            const filteredResults = filterCatalogItems(data.results, id, allowFuture);
+
+            if (filteredResults.length > 0) {
+                const skipRegionCheck = (id === "tmdb.movie.anime" || id === "tmdb.series.anime");
+                const preferKitsuId = usesKitsuAnimeIds(id);
+                let seriesAvailabilityRegion = null;
+                if (tmdbType === "tv" && !id.includes("anime")) {
+                    seriesAvailabilityRegion = providerRegion || "IT";
+                }
+                const newMetas = await enrichAndMapItems(
+                    filteredResults,
+                    type,
+                    tmdbType,
+                    config,
+                    allowFuture,
+                    skipRegionCheck,
+                    seriesAvailabilityRegion,
+                    preferKitsuId
+                );
+                metas = metas.concat(newMetas);
+            }
+
+            fetchedPage++;
+            pagesLeft--;
+        } catch (error) {
+            console.error(`[Easy Catalogs] Fetch Error on page ${fetchedPage}:`, error);
+            break;
+        }
+    }
+
+    return metas;
 }
 
 function uniqueNonEmptyStrings(values) {
@@ -2793,7 +3104,7 @@ Object.entries(TV_GENRES).forEach(([name, id]) => GENRE_ID_TO_NAME[id] = name);
 const PROVIDERS = {
     "Netflix": 8, "Amazon Prime Video": 119, "Disney+": 337,
     "HBO Max": 1899,
-    "Apple TV+": 350, "Paramount+": 531, "NOW": 39, "Sky Go": 29,
+    "Apple TV+": 350, "Paramount+": 531, "Sky Go / NOW": "39|29",
     "Rai Play": 222, "Mediaset Infinity": "359|110", "Timvision": 109,
     "Rakuten TV": 35
 };
@@ -2805,7 +3116,7 @@ const COMPANY_IDS = {
     "Apple TV+": 194232,
     "HBO Max": "7429|174|128064|12|158691", // HBO Films, WB, DC Films, New Line, HBO Max
     "Paramount+": 4,
-    "Rai Play": 1583, "Mediaset Infinity": 1677, "Sky Go": 19079, "NOW": 19079,
+    "Rai Play": 1583, "Mediaset Infinity": 1677, "Sky Go / NOW": 19079,
     "Timvision": 109, "Rakuten TV": 35
 };
 
@@ -2818,21 +3129,23 @@ const NETWORK_IDS = {
     "Paramount+": 4330,
     "Rai Play": "3463|533|236|1583", 
     "Mediaset Infinity": "537|402|1677",
-    "NOW": 2667, "Sky Go": 2667,
+    "Sky Go / NOW": 2667,
     "Timvision": 109 // Fallback ID if exists
 };
 
 const SLUG_TO_PROVIDER = {
     "netflix": "Netflix", "amazon": "Amazon Prime Video",
     "disney": "Disney+", "apple": "Apple TV+", "hbo": "HBO Max",
-    "paramount": "Paramount+", "now": "NOW", "sky": "Sky Go",
+    "paramount": "Paramount+", "now": "Sky Go / NOW", "sky": "Sky Go / NOW",
     "rai": "Rai Play", "mediaset": "Mediaset Infinity",
     "timvision": "Timvision", "rakuten": "Rakuten TV"
 };
 
 const PROVIDER_SLUGS = {};
 Object.entries(SLUG_TO_PROVIDER).forEach(([slug, name]) => {
-    PROVIDER_SLUGS[name] = slug;
+    if (!PROVIDER_SLUGS[name]) {
+        PROVIDER_SLUGS[name] = slug;
+    }
 });
 
 const manifest = {
@@ -3711,9 +4024,15 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             }
 
             if (providerName) {
-                providerFromId = providerName;
+                providerFromId = normalizeProviderName(providerName);
             }
         }
+
+        const providerRegion = providerFromId ? getProviderRegion(providerFromId) : null;
+        const providerOriginalSourceId = providerFromId
+            ? (tmdbType === "movie" ? COMPANY_IDS[providerFromId] : NETWORK_IDS[providerFromId])
+            : null;
+        const shouldMergeProviderExclusives = !!(providerFromId && !isCatalogOnly && providerOriginalSourceId);
 
         // Handle Year Catalog
         if (id === "tmdb.movie.year" || id === "tmdb.series.year") {
@@ -3778,7 +4097,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
         } else if (providerFromId) {
             // Logic for Provider Catalog
             const providerId = PROVIDERS[providerFromId];
-            const region = providerFromId === "HBO Max" ? "US" : "IT";
+            const region = providerRegion;
 
             if (tmdbType === "movie") {
                 endpoint = "discover/movie";
@@ -3823,15 +4142,16 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             
             // Check if it's a provider slug first (e.g. from a legacy context, though standard Stremio passes genre string)
             // Or check if it matches our provider list
-            let providerId = PROVIDERS[genre];
+            const providerName = normalizeProviderName(genre);
+            let providerId = PROVIDERS[providerName];
             
             if (providerId) {
                 // Provider Logic (via Filter)
-                const region = genre === "HBO Max" ? "US" : "IT";
+                const region = getProviderRegion(providerName);
                 
                 if (tmdbType === "movie") {
                     endpoint = "discover/movie";
-                    const companyId = COMPANY_IDS[genre];
+                    const companyId = COMPANY_IDS[providerName];
                     if (companyId) {
                         queryParams += `&with_companies=${companyId}&sort_by=primary_release_date.desc&primary_release_date.lte=${new Date().toISOString().split('T')[0]}`;
                     } else {
@@ -3839,7 +4159,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
                     }
                 } else {
                     endpoint = "discover/tv";
-                    const networkId = NETWORK_IDS[genre];
+                    const networkId = NETWORK_IDS[providerName];
                     if (networkId) {
                         queryParams += `&with_networks=${networkId}&sort_by=first_air_date.desc&first_air_date.lte=${new Date().toISOString().split('T')[0]}`;
                     } else {
@@ -3921,56 +4241,70 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
         // Remove existing page param if present to handle it in loop
         queryParams = queryParams.replace(/&page=\d+/g, '');
 
-        while (metas.length < 20 && maxPagesToFetch > 0) {
-             const currentUrl = `${BASE_URL}/${endpoint}?${queryParams}&page=${fetchedPage}`;
-             console.log(`[Easy Catalogs] Fetching Page ${fetchedPage}: ${currentUrl}`);
-             
-             try {
-                 const response = await fetch(currentUrl);
-                 const data = await response.json();
-                 
-                 if (!data.results || data.results.length === 0) break;
-                 
-                 // Basic Filter: Remove future content or content without date
-                 // This ensures Popular, Trending, Top Rated also respect the rule
-                 const today = new Date().toISOString().split('T')[0];
-                 const filteredResults = data.results.filter(item => {
-                    const date = item.release_date || item.first_air_date;
+        if (shouldMergeProviderExclusives) {
+            const skip = resolvedExtra && resolvedExtra.skip ? Number(resolvedExtra.skip) || 0 : 0;
+            const mergedResults = await fetchProviderOriginalMergedResults({
+                id,
+                tmdbType,
+                providerName: providerFromId,
+                extra: resolvedExtra,
+                config,
+                allowFuture,
+                skip
+            });
 
-                    // EXCLUDE Anime (Animation + JA) from non-Anime catalogs
-                    if (!id.includes("anime")) {
-                        if (item.genre_ids && item.genre_ids.includes(16) && item.original_language === 'ja') {
-                            return false;
-                        }
-                    }
+            if (mergedResults) {
+                const skipRegionCheck = false;
+                const preferKitsuId = usesKitsuAnimeIds(id);
+                const seriesAvailabilityRegion = tmdbType === "tv" ? mergedResults.region : null;
+                metas = await enrichAndMapItems(
+                    mergedResults.items,
+                    type,
+                    tmdbType,
+                    config,
+                    allowFuture,
+                    skipRegionCheck,
+                    seriesAvailabilityRegion,
+                    preferKitsuId
+                );
 
-                    if (allowFuture) return !!date;
-                    return date && date <= today;
-               });
-                
-                if (filteredResults.length > 0) {
-                    const skipRegionCheck = (id === "tmdb.movie.anime" || id === "tmdb.series.anime");
-                    const preferKitsuId = usesKitsuAnimeIds(id);
-                    let seriesAvailabilityRegion = null;
-                    if (tmdbType === "tv" && !id.includes("anime")) {
-                        // Default strict region for all series catalogs
-                        seriesAvailabilityRegion = "IT";
-                        // Provider exception
-                        if (providerFromId === "HBO Max") {
-                            seriesAvailabilityRegion = "US";
-                        }
-                    }
-                    const newMetas = await enrichAndMapItems(filteredResults, type, tmdbType, config, allowFuture, skipRegionCheck, seriesAvailabilityRegion, preferKitsuId);
-                    metas = metas.concat(newMetas);
+                return { metas };
+            }
+        }
+
+        metas = await fetchCatalogMetasForQuery({
+            endpoint,
+            queryParams,
+            id,
+            type,
+            tmdbType,
+            config,
+            allowFuture,
+            providerRegion,
+            startPage: fetchedPage,
+            maxPagesToFetch
+        });
+
+        if (metas.length === 0 && providerFromId) {
+            const fallbackRegions = getProviderRegions(providerFromId).slice(1);
+            for (const fallbackRegion of fallbackRegions) {
+                metas = await fetchCatalogMetasForQuery({
+                    endpoint,
+                    queryParams: replaceProviderQueryRegion(queryParams, fallbackRegion),
+                    id,
+                    type,
+                    tmdbType,
+                    config,
+                    allowFuture,
+                    providerRegion: fallbackRegion,
+                    startPage: fetchedPage,
+                    maxPagesToFetch
+                });
+
+                if (metas.length > 0) {
+                    break;
                 }
-                 
-                 fetchedPage++;
-                 maxPagesToFetch--;
-                 
-             } catch (e) {
-                 console.error(`[Easy Catalogs] Fetch Error on page ${fetchedPage}:`, e);
-                 break;
-             }
+            }
         }
 
         return { metas: metas };
@@ -4074,7 +4408,21 @@ app.get('/manifest.json', (req, res) => {
     let filteredCatalogs = [];
     
     if (config.catalogs) {
-        const allowedKeys = config.catalogs.split(',');
+        const allowedKeys = [...new Set(
+            config.catalogs
+                .split(',')
+                .map(item => item.trim())
+                .filter(Boolean)
+                .map(item => {
+                    const isDiscoverOnly = item.endsWith('_d');
+                    const rawLookupKey = isDiscoverOnly ? item.slice(0, -2) : item;
+                    const normalizedLookupKey = normalizeConfiguredCatalogEntryKey(rawLookupKey);
+                    return normalizedLookupKey
+                        ? `${normalizedLookupKey}${isDiscoverOnly ? '_d' : ''}`
+                        : "";
+                })
+                .filter(Boolean)
+        )];
         
         allowedKeys.forEach(key => {
             // Check for Discover Only suffix
@@ -4137,7 +4485,21 @@ app.get('/manifest.json', (req, res) => {
                 'anime_special': 'kitsu.series.special'
             };
             
-            if (standardMap[lookupKey]) {
+            if (lookupKey === TOP10_GLOBAL_CATALOG_ID) {
+                [TOP10_MOVIE_MANIFEST_ID, TOP10_SERIES_MANIFEST_ID].forEach(catalogId => {
+                    const cat = fullCatalogs.find(c => c.id === catalogId);
+                    if (!cat) return;
+
+                    const resolvedCatalog = applyConfiguredCatalogName(cat, lookupKey, customCatalogNames);
+                    if (isDiscoverOnly) {
+                        const catClone = { ...resolvedCatalog, extra: [...(resolvedCatalog.extra || [])] };
+                        catClone.extra.push({ name: "discover", isRequired: true, options: ["Only"] });
+                        filteredCatalogs.push(catClone);
+                    } else {
+                        filteredCatalogs.push(resolvedCatalog);
+                    }
+                });
+            } else if (standardMap[lookupKey]) {
                 const cat = fullCatalogs.find(c => c.id === standardMap[lookupKey]);
                 if (cat) {
                     const resolvedCatalog = applyConfiguredCatalogName(cat, lookupKey, customCatalogNames);
@@ -4224,4 +4586,5 @@ try {
 app.listen(PORT, () => {
     console.log(`Addon active on http://localhost:${PORT}`);
 });
+
 

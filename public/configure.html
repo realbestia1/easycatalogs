@@ -21,7 +21,6 @@
             --border-color: #27272a;
             --success-color: #22c55e;
             --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --actions-bar-space: 72px;
         }
 
         * {
@@ -44,7 +43,7 @@
         .container {
             max-width: 1620px;
             margin: 0 auto;
-            padding: 1.5rem 2rem calc(1.25rem + var(--actions-bar-space));
+            padding: 1.5rem 2rem 1.25rem;
             width: 100%;
             display: flex;
             flex-direction: column;
@@ -92,7 +91,7 @@
 
         .setup-nav-tabs {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 0.6rem;
         }
 
@@ -174,6 +173,10 @@
             display: flex;
         }
 
+        body[data-setup-step="overview"] .container {
+            padding-bottom: 1.5rem;
+        }
+
         .main-grid {
             display: grid;
             grid-template-columns: minmax(360px, 820px) minmax(280px, 360px);
@@ -197,6 +200,189 @@
             min-height: 0;
         }
 
+        .intro-shell {
+            width: min(100%, 1280px);
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 1.25rem;
+            flex: 1;
+            min-height: 0;
+            align-items: stretch;
+        }
+
+        .intro-hero,
+        .intro-card {
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            background-color: var(--card-bg);
+            overflow: hidden;
+        }
+
+        .intro-hero {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 1.5rem;
+            padding: 2rem;
+            background:
+                radial-gradient(circle at top right, rgba(139, 92, 246, 0.28), transparent 34%),
+                radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.18), transparent 26%),
+                linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+            min-height: 480px;
+        }
+
+        .intro-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            width: fit-content;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #ddd6fe;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .intro-title {
+            font-size: clamp(2.2rem, 5vw, 4rem);
+            line-height: 0.96;
+            letter-spacing: -0.05em;
+            max-width: 12ch;
+        }
+
+        .intro-copy {
+            max-width: 58ch;
+            color: rgba(244, 244, 245, 0.86);
+            font-size: 1rem;
+            line-height: 1.65;
+        }
+
+        .intro-step-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem;
+        }
+
+        .intro-step-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.6rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            font-size: 0.84rem;
+            font-weight: 600;
+        }
+
+        .intro-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .step-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            padding-top: 1rem;
+        }
+
+        .intro-note {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.45;
+            max-width: 46ch;
+        }
+
+        .intro-continue-btn {
+            padding-inline: 1.45rem;
+        }
+
+        .intro-side {
+            display: grid;
+            gap: 1rem;
+            min-height: 0;
+        }
+
+        .intro-card {
+            padding: 1.3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02)),
+                var(--card-bg);
+        }
+
+        .intro-flow-list {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .intro-flow-item {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.75rem;
+            align-items: start;
+            padding: 0.9rem 0.95rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .intro-flow-index {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(139, 92, 246, 0.14);
+            color: #ddd6fe;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            flex: 0 0 auto;
+        }
+
+        .intro-flow-copy strong,
+        .intro-mode-name {
+            display: block;
+            font-size: 0.92rem;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .intro-flow-copy p,
+        .intro-mode p,
+        .intro-provider-footnote {
+            color: var(--text-secondary);
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        .intro-mode-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.85rem;
+        }
+
+        .intro-mode {
+            padding: 1rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
         @media (max-width: 900px) {
             body {
                 height: auto;
@@ -207,7 +393,7 @@
                 height: auto;
                 overflow: visible;
                 display: block;
-                padding: 0 0 calc(var(--actions-bar-space) + env(safe-area-inset-bottom)) 0; /* Full width container */
+                padding: 0 0 1rem 0; /* Full width container */
             }
 
             .main-grid {
@@ -256,6 +442,55 @@
                 width: 100%;
                 padding: 0 0.5rem;
                 min-height: auto;
+            }
+
+            body[data-setup-step="overview"] .container {
+                padding-bottom: 1rem;
+            }
+
+            .intro-shell {
+                width: 100%;
+                grid-template-columns: 1fr;
+                gap: 0.85rem;
+                padding: 0 0.5rem;
+            }
+
+            .intro-hero {
+                min-height: auto;
+                padding: 1.25rem;
+                gap: 1.25rem;
+            }
+
+            .intro-title {
+                max-width: none;
+                font-size: clamp(2rem, 10vw, 2.8rem);
+            }
+
+            .intro-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .step-footer {
+                padding-top: 0.85rem;
+            }
+
+            .step-footer .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .intro-continue-btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .intro-card {
+                padding: 1rem;
+            }
+
+            .intro-mode-grid {
+                grid-template-columns: 1fr;
             }
 
             .catalog-nav {
@@ -486,6 +721,42 @@
             color: var(--text-secondary);
             font-size: 0.8rem;
             line-height: 1.35;
+        }
+
+        .info-item p + p {
+            margin-top: 0.45rem;
+        }
+
+        @media (min-width: 901px) {
+            .setup-step[data-step="integrations"] .main-grid {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 1.25rem;
+            }
+
+            .setup-step[data-step="integrations"] .settings-panel {
+                width: min(100%, 860px);
+                justify-self: center;
+            }
+
+            .setup-step[data-step="integrations"] .info-panel {
+                width: 100%;
+                max-width: none;
+            }
+
+            .setup-step[data-step="integrations"] .info-list {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 0.9rem;
+            }
+
+            .setup-step[data-step="integrations"] .info-item {
+                height: 100%;
+            }
+        }
+
+        @media (min-width: 901px) and (max-width: 1180px) {
+            .setup-step[data-step="integrations"] .info-list {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         .catalog-nav {
@@ -944,22 +1215,6 @@
             opacity: 0.6;
         }
 
-        /* Actions Bar */
-        .actions-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background-color: rgba(24, 24, 27, 0.9);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid var(--border-color);
-            padding: 0.8rem 1rem;
-            display: flex;
-            justify-content: center;
-            gap: 0.75rem;
-            z-index: 100;
-        }
-
         .btn {
             padding: 0.65rem 1.2rem;
             border-radius: 0.7rem;
@@ -998,7 +1253,7 @@
         /* Toast Message */
         #toast {
             position: fixed;
-            bottom: 100px;
+            bottom: 32px;
             left: 50%;
             transform: translateX(-50%) translateY(20px);
             background-color: #27272a;
@@ -1084,11 +1339,6 @@
                 border-radius: 0.5rem;
             }
             
-            .actions-bar {
-                padding: 0.7rem 0.85rem;
-                padding-bottom: max(0.7rem, env(safe-area-inset-bottom));
-            }
-            
             .btn {
                 padding: 0.7rem 0.9rem;
                 font-size: 0.86rem;
@@ -1099,7 +1349,7 @@
         }
     </style>
 </head>
-<body>
+<body data-setup-step="overview">
     <div class="container">
         <div class="setup-nav">
             <div class="setup-brand">
@@ -1107,22 +1357,29 @@
                 <div class="setup-brand-subtitle">Configura i tuoi cataloghi italiani per Stremio</div>
             </div>
             <div class="setup-nav-tabs" role="tablist" aria-label="Flusso configurazione">
-                <button class="setup-nav-btn active" type="button" data-step="integrations" role="tab" aria-selected="true" aria-controls="setup-step-integrations">
+                <button class="setup-nav-btn active" type="button" data-step="overview" role="tab" aria-selected="true" aria-controls="setup-step-overview">
                     <span class="setup-nav-index">01</span>
+                    <span class="setup-nav-copy">
+                        <span class="setup-nav-title">Info</span>
+                        <span class="setup-nav-subtitle">Panoramica rapida del flusso e dei cataloghi provider.</span>
+                    </span>
+                </button>
+                <button class="setup-nav-btn" type="button" data-step="integrations" role="tab" aria-selected="false" aria-controls="setup-step-integrations">
+                    <span class="setup-nav-index">02</span>
                     <span class="setup-nav-copy">
                         <span class="setup-nav-title">Integrazioni</span>
                         <span class="setup-nav-subtitle">Chiavi API, ERDB e opzioni generali dell'addon.</span>
                     </span>
                 </button>
                 <button class="setup-nav-btn" type="button" data-step="selection" role="tab" aria-selected="false" aria-controls="setup-step-selection">
-                    <span class="setup-nav-index">02</span>
+                    <span class="setup-nav-index">03</span>
                     <span class="setup-nav-copy">
                         <span class="setup-nav-title">Seleziona Cataloghi</span>
                         <span class="setup-nav-subtitle">Scegli quali cataloghi includere nel link configurato.</span>
                     </span>
                 </button>
                 <button class="setup-nav-btn" type="button" data-step="ordering" role="tab" aria-selected="false" aria-controls="setup-step-ordering">
-                    <span class="setup-nav-index">03</span>
+                    <span class="setup-nav-index">04</span>
                     <span class="setup-nav-copy">
                         <span class="setup-nav-title">Ordinamento</span>
                         <span class="setup-nav-subtitle">Gestisci la posizione finale dei cataloghi attivi.</span>
@@ -1132,7 +1389,82 @@
         </div>
 
         <div class="setup-steps">
-            <section class="setup-step active" id="setup-step-integrations" data-step="integrations" role="tabpanel">
+            <section class="setup-step active" id="setup-step-overview" data-step="overview" role="tabpanel" aria-hidden="false">
+                <div class="intro-shell">
+                    <div class="intro-hero">
+                        <div>
+                            <div class="intro-kicker">Easy Catalogs per Stremio</div>
+                            <h1 class="intro-title" style="margin-top: 1rem;">Configura i tuoi cataloghi italiani con un flusso piu chiaro e piu bello.</h1>
+                            <p class="intro-copy" style="margin-top: 1rem;">Qui puoi capire in un colpo d'occhio cosa cambia tra Original e Completo, quali passaggi farai e come verra costruito il tuo link finale prima ancora di aprire il configuratore vero.</p>
+                        </div>
+
+                        <div class="intro-step-strip">
+                            <span class="intro-step-pill">01 Info</span>
+                            <span class="intro-step-pill">02 Integrazioni</span>
+                            <span class="intro-step-pill">03 Cataloghi</span>
+                            <span class="intro-step-pill">04 Ordinamento</span>
+                        </div>
+
+                        <div class="intro-actions">
+                            <button type="button" class="btn btn-primary intro-continue-btn" data-step-target="integrations">Continua</button>
+                            <p class="intro-note">Entrerai subito nella configurazione completa e potrai sempre tornare a modificare nomi, ordine e cataloghi attivi prima di installare l'addon.</p>
+                        </div>
+                    </div>
+
+                    <div class="intro-side">
+                        <div class="intro-card">
+                            <div class="section-title">Flusso Configurazione</div>
+                            <div class="intro-flow-list">
+                                <div class="intro-flow-item">
+                                    <span class="intro-flow-index">01</span>
+                                    <div class="intro-flow-copy">
+                                        <strong>Info</strong>
+                                        <p>Parti da una panoramica chiara del flusso e capisci subito come funzionano i cataloghi provider.</p>
+                                    </div>
+                                </div>
+                                <div class="intro-flow-item">
+                                    <span class="intro-flow-index">02</span>
+                                    <div class="intro-flow-copy">
+                                        <strong>Integrazioni</strong>
+                                        <p>Imposta TMDB, poster personalizzati, ERDB e le opzioni globali del link configurato.</p>
+                                    </div>
+                                </div>
+                                <div class="intro-flow-item">
+                                    <span class="intro-flow-index">03</span>
+                                    <div class="intro-flow-copy">
+                                        <strong>Seleziona Cataloghi</strong>
+                                        <p>Attiva solo i cataloghi che vuoi esporre, divisi tra Top 10, Standard e Anime.</p>
+                                    </div>
+                                </div>
+                                <div class="intro-flow-item">
+                                    <span class="intro-flow-index">04</span>
+                                    <div class="intro-flow-copy">
+                                        <strong>Ordinamento</strong>
+                                        <p>Usa la lista finale per decidere l'ordine con cui i cataloghi compariranno in Stremio.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="intro-card">
+                            <div class="section-title">Cataloghi Provider</div>
+                            <div class="intro-mode-grid">
+                                <div class="intro-mode">
+                                    <span class="intro-mode-name">Original</span>
+                                    <p>Mostra gli originali veri del provider piu i contenuti esclusivi disponibili solo su quel servizio.</p>
+                                </div>
+                                <div class="intro-mode">
+                                    <span class="intro-mode-name">Completo</span>
+                                    <p>Mostra tutto il catalogo disponibile su quel provider nella regione usata dal filtro.</p>
+                                </div>
+                            </div>
+                            <p class="intro-provider-footnote">Puoi attivare una sola modalita o entrambe, poi rinominare e riordinare tutto prima di copiare o installare il link.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="setup-step" id="setup-step-integrations" data-step="integrations" role="tabpanel">
                 <div class="main-grid">
                     <div class="settings-panel">
                         <div class="panel-section">
@@ -1173,27 +1505,8 @@
                                     </label>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="info-panel">
-                        <div class="section-title">Flusso Configurazione</div>
-                        <div class="info-list">
-                            <div class="info-item">
-                                <strong>1. Integrazioni</strong>
-                                <p>Imposta TMDB, Top Poster, ERDB e le opzioni globali del link configurato.</p>
-                            </div>
-                            <div class="info-item">
-                                <strong>2. Seleziona Cataloghi</strong>
-                                <p>Attiva solo i cataloghi che vuoi esporre, divisi tra Top 10, Standard e Anime.</p>
-                            </div>
-                            <div class="info-item">
-                                <strong>3. Ordinamento</strong>
-                                <p>Usa la lista completa finale per definire la posizione dei cataloghi attivi.</p>
-                            </div>
-                            <div class="info-item">
-                                <strong>Provider</strong>
-                                <p>Nei cataloghi standard puoi gestire Original, Completo o entrambe le modalita con i pulsanti rapidi.</p>
+                            <div class="step-footer">
+                                <button type="button" class="btn btn-primary" data-step-target="selection">Continua</button>
                             </div>
                         </div>
                     </div>
@@ -1218,7 +1531,17 @@
                             <section class="catalog-page active" id="catalog-page-top10" data-page="top10" role="tabpanel">
                                 <div class="list-header">
                                     <div>
-                                        <div class="list-title">Top 10 Italia</div>
+                                        <div class="list-title-row">
+                                            <div class="list-title">Top 10 Italia</div>
+                                            <div class="list-header-actions" aria-label="Azioni rapide cataloghi top 10">
+                                                <button class="catalog-action-btn" type="button" id="top10-enable-all-btn">
+                                                    Attiva Tutti i Cataloghi
+                                                </button>
+                                                <button class="catalog-action-btn" type="button" id="top10-disable-all-btn">
+                                                    Disattiva Tutti i Cataloghi
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div class="list-subtitle">Scegli le classifiche Top 10 globali o per provider da includere nel link.</div>
                                     </div>
                                 </div>
@@ -1259,7 +1582,17 @@
                             <section class="catalog-page" id="catalog-page-anime" data-page="anime" role="tabpanel">
                                 <div class="list-header">
                                     <div>
-                                        <div class="list-title">Cataloghi Anime</div>
+                                        <div class="list-title-row">
+                                            <div class="list-title">Cataloghi Anime</div>
+                                            <div class="list-header-actions" aria-label="Azioni rapide cataloghi anime">
+                                                <button class="catalog-action-btn" type="button" id="anime-enable-all-btn">
+                                                    Attiva Tutti i Cataloghi
+                                                </button>
+                                                <button class="catalog-action-btn" type="button" id="anime-disable-all-btn">
+                                                    Disattiva Tutti i Cataloghi
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div class="list-subtitle">Scegli la fonte anime oppure mostra entrambe, poi attiva i cataloghi da portare nella lista finale.</div>
                                     </div>
                                     <div class="anime-source-panel">
@@ -1275,6 +1608,9 @@
                                     <!-- Javascript will populate this -->
                                 </div>
                             </section>
+                        </div>
+                        <div class="step-footer">
+                            <button type="button" class="btn btn-primary" id="selection-continue-btn">Continua</button>
                         </div>
                     </div>
                 </div>
@@ -1292,22 +1628,14 @@
                         <div id="selected-sortable-list" class="sortable-list">
                             <!-- Javascript will populate this -->
                         </div>
+                        <div class="step-footer">
+                            <button type="button" class="btn btn-secondary" onclick="copyUrl()">Copia Link</button>
+                            <button type="button" class="btn btn-primary" onclick="installAddon()">Installa Addon</button>
+                        </div>
                     </div>
                 </div>
             </section>
         </div>
-    </div>
-
-    <!-- Actions Bar -->
-    <div class="actions-bar">
-        <button class="btn btn-secondary" onclick="copyUrl()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-            Copia Link
-        </button>
-        <button class="btn btn-primary" onclick="installAddon()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Installa Addon
-        </button>
     </div>
 
     <!-- Toast -->
@@ -1324,8 +1652,7 @@
             { name: "Apple TV+", slug: "apple" },
             { name: "HBO Max", slug: "hbo" },
             { name: "Paramount+", slug: "paramount" },
-            { name: "NOW", slug: "now" },
-            { name: "Sky Go", slug: "sky" },
+            { name: "Sky Go / NOW", slug: "now" },
             { name: "Rai Play", slug: "rai" },
             { name: "Mediaset Infinity", slug: "mediaset" },
             { name: "Timvision", slug: "timvision" },
@@ -1635,7 +1962,11 @@
                 anime_popular_series: "anime_kitsu_popular_series",
                 anime_ova: "anime_kitsu_ova",
                 anime_ona: "anime_kitsu_ona",
-                anime_special: "anime_kitsu_special"
+                anime_special: "anime_kitsu_special",
+                sky: "now",
+                sky_original: "now_original",
+                sky_catalog: "now_catalog",
+                sky_top10: "now_top10"
             };
 
             return legacyMap[id] || id;
@@ -2136,6 +2467,21 @@
             renderCatalogList("standard");
         }
 
+        function setTop10CatalogsActive(nextState) {
+            catalogVisibility[TOP10_GLOBAL_CATALOG_ID] = nextState;
+            TOP10_PROVIDER_IDS.forEach(id => {
+                catalogVisibility[`${id}_top10`] = nextState;
+            });
+            renderCatalogList("top10");
+        }
+
+        function setAnimeCatalogsActive(nextState) {
+            getAnimeCatalogIdsForSource(selectedAnimeSource).forEach(id => {
+                catalogVisibility[id] = nextState;
+            });
+            renderCatalogList("anime");
+        }
+
         function setStandardProvidersMode(mode) {
             const activeProviders = getActiveStandardProviders();
             if (activeProviders.length === 0) return;
@@ -2531,6 +2877,8 @@
         }
 
         function switchSetupStep(step) {
+            document.body.dataset.setupStep = step;
+
             document.querySelectorAll(".setup-nav-btn").forEach(button => {
                 const isActive = button.dataset.step === step;
                 button.classList.toggle("active", isActive);
@@ -2542,6 +2890,8 @@
                 panel.classList.toggle("active", isActive);
                 panel.setAttribute("aria-hidden", isActive ? "false" : "true");
             });
+
+            window.scrollTo({ top: 0, left: 0 });
         }
 
         function switchCatalogPage(page) {
@@ -2556,6 +2906,25 @@
                 panel.classList.toggle("active", isActive);
                 panel.setAttribute("aria-hidden", isActive ? "false" : "true");
             });
+        }
+
+        const CATALOG_PAGE_ORDER = ["top10", "standard", "anime"];
+
+        function getActiveCatalogPage() {
+            const activeButton = document.querySelector(".catalog-nav-btn.active");
+            return activeButton ? activeButton.dataset.page : CATALOG_PAGE_ORDER[0];
+        }
+
+        function advanceSelectionStep() {
+            const activePage = getActiveCatalogPage();
+            const activePageIndex = CATALOG_PAGE_ORDER.indexOf(activePage);
+
+            if (activePageIndex !== -1 && activePageIndex < CATALOG_PAGE_ORDER.length - 1) {
+                switchCatalogPage(CATALOG_PAGE_ORDER[activePageIndex + 1]);
+                return;
+            }
+
+            switchSetupStep("ordering");
         }
 
         function getConfiguration() {
@@ -2629,6 +2998,18 @@
             });
         });
 
+        document.querySelectorAll("[data-step-target]").forEach(button => {
+            button.addEventListener("click", () => {
+                if (button.dataset.stepTarget) {
+                    switchSetupStep(button.dataset.stepTarget);
+                }
+            });
+        });
+
+        document.getElementById("selection-continue-btn").addEventListener("click", () => {
+            advanceSelectionStep();
+        });
+
         document.querySelectorAll("[data-anime-source]").forEach(button => {
             button.addEventListener("click", () => {
                 setAnimeSource(button.dataset.animeSource);
@@ -2655,6 +3036,22 @@
             setStandardProvidersMode("both");
         });
 
+        document.getElementById("top10-enable-all-btn").addEventListener("click", () => {
+            setTop10CatalogsActive(true);
+        });
+
+        document.getElementById("top10-disable-all-btn").addEventListener("click", () => {
+            setTop10CatalogsActive(false);
+        });
+
+        document.getElementById("anime-enable-all-btn").addEventListener("click", () => {
+            setAnimeCatalogsActive(true);
+        });
+
+        document.getElementById("anime-disable-all-btn").addEventListener("click", () => {
+            setAnimeCatalogsActive(false);
+        });
+
         easyRatingsTokenInput.addEventListener("input", () => {
             scheduleEasyRatingsTokenVerification();
         });
@@ -2669,7 +3066,7 @@
         renderCatalogList("top10");
         renderCatalogList("anime");
         initializeSelectedCatalogSortable();
-        switchSetupStep("integrations");
+        switchSetupStep("overview");
         switchCatalogPage("top10");
 
         if (window.kofiWidgetOverlay && typeof window.kofiWidgetOverlay.draw === "function") {
@@ -2683,4 +3080,6 @@
     </script>
 </body>
 </html>
+
+
 
