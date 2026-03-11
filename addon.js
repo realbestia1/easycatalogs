@@ -164,6 +164,41 @@ function getConfiguredCatalogNames(config = null) {
     }, {});
 }
 
+function getConfiguredCatalogShapes(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const rawShapes = resolvedConfig && resolvedConfig.catalogShapes;
+    if (!rawShapes) return new Set();
+
+    const normalized = new Set();
+    const addKey = key => {
+        const normalizedKey = normalizeConfiguredCatalogEntryKey(key);
+        if (normalizedKey) normalized.add(normalizedKey);
+    };
+
+    if (typeof rawShapes === "string") {
+        rawShapes
+            .split(",")
+            .map(value => value.trim())
+            .filter(Boolean)
+            .forEach(addKey);
+        return normalized;
+    }
+
+    if (Array.isArray(rawShapes)) {
+        rawShapes.forEach(addKey);
+        return normalized;
+    }
+
+    if (typeof rawShapes !== "object") return normalized;
+
+    Object.entries(rawShapes).forEach(([key, value]) => {
+        if (!value) return;
+        addKey(key);
+    });
+
+    return normalized;
+}
+
 function resolveConfiguredCatalogName(lookupKey, catalog, customNames = {}) {
     const rawLookupKey = String(lookupKey || "").trim();
     if (!rawLookupKey || !catalog || !customNames || typeof customNames !== "object") return "";
@@ -181,6 +216,29 @@ function applyConfiguredCatalogName(catalog, lookupKey, customNames = {}) {
     const customName = resolveConfiguredCatalogName(lookupKey, catalog, customNames);
     if (!customName || customName === catalog.name) return catalog;
     return { ...catalog, name: customName };
+}
+
+function applyConfiguredCatalogShape(catalog, lookupKey, shapes) {
+    if (!catalog || !shapes || shapes.size === 0) return catalog;
+
+    const normalizedKey = normalizeConfiguredCatalogEntryKey(lookupKey);
+    if (!normalizedKey || !shapes.has(normalizedKey)) return catalog;
+    if (catalog.posterShape === "landscape") return catalog;
+
+    return { ...catalog, posterShape: "landscape" };
+}
+
+function getTextBackdropFromDetails(details, preferredLangs = ["it", "en"]) {
+    const backdrops = details && details.images && Array.isArray(details.images.backdrops)
+        ? details.images.backdrops
+        : [];
+    if (backdrops.length === 0) return null;
+
+    for (const lang of preferredLangs) {
+        const match = backdrops.find(b => b && b.iso_639_1 === lang && b.file_path);
+        if (match) return `https://image.tmdb.org/t/p/original${match.file_path}`;
+    }
+    return null;
 }
 
 function isSearchCatalog(catalog) {
@@ -238,10 +296,11 @@ async function enrichAndMapItems(results, stremioType, tmdbType, config = null, 
         let links = [];
         let trailers = [];
         let trailerStreams = [];
-        let releaseInfo = (item.release_date || item.first_air_date || "").substring(0, 4);
-        let exactReleaseDate = item.release_date || item.first_air_date;
-        let details = null;
-        let kitsuId = null;
+    let releaseInfo = (item.release_date || item.first_air_date || "").substring(0, 4);
+    let exactReleaseDate = item.release_date || item.first_air_date;
+    let details = null;
+    let textBackdrop = null;
+    let kitsuId = null;
         const resolvedConfig = getRequestConfig(config);
         const manifestUrl = getManifestUrl(resolvedConfig);
 
@@ -254,6 +313,7 @@ async function enrichAndMapItems(results, stremioType, tmdbType, config = null, 
             details = await fetchTmdbDetails(typePath, item.id, resolvedConfig);
 
             if (details) {
+                textBackdrop = getTextBackdropFromDetails(details);
                 if (tmdbType === "movie" && details.release_dates && details.release_dates.results) {
                     const itRelease = details.release_dates.results.find(r => r.iso_3166_1 === "IT");
                     if (itRelease && itRelease.release_dates && itRelease.release_dates.length > 0) {
@@ -467,6 +527,7 @@ async function enrichAndMapItems(results, stremioType, tmdbType, config = null, 
             name: item.title || item.name,
             poster: posterUrl,
             background: backgroundUrl,
+            textBackdrop: textBackdrop || undefined,
             logo: logoUrl,
             description: item.overview || (details && details.overview) || undefined,
             releaseInfo: releaseInfo,
@@ -536,6 +597,101 @@ function normalizeTop10ManifestId(catalogId) {
         return `${TOP10_MANIFEST_PREFIX}${normalizedCatalogId.slice(LEGACY_TOP10_MANIFEST_PREFIX.length)}`;
     }
     return normalizedCatalogId;
+}
+
+const CATALOG_ID_TO_SHAPE_KEY = {
+    "tmdb.movie.upcoming": "upcoming_movie",
+    "tmdb.series.upcoming": "upcoming_series",
+    "tmdb.movie.now_playing": "now_playing_movie",
+    "tmdb.movie.popular": "popular_movie",
+    "tmdb.series.popular": "popular_series",
+    "tmdb.movie.trending": "trending_movie",
+    "tmdb.series.trending": "trending_series",
+    "tmdb.movie.top_rated": "top_rated_movie",
+    "tmdb.series.top_rated": "top_rated_series",
+    "tmdb.movie.year": "year_movie",
+    "tmdb.series.year": "year_series",
+    "tmdb.movie.kids": "kids_movie",
+    "tmdb.series.kids": "kids_series",
+    "tmdb.movie.search": "search_movie",
+    "tmdb.series.search": "search_series",
+    "tmdb.movie.anime": "anime_tmdb_movie",
+    "tmdb.series.anime": "anime_tmdb_series",
+    "tmdb.movie.anime_search": "anime_tmdb_search_movie",
+    "tmdb.series.anime_search": "anime_tmdb_search_series"
+};
+
+const KITSU_CATALOG_ID_TO_SHAPE_KEY = {
+    "kitsu.series.latest": "anime_kitsu_latest_series",
+    "kitsu.series.popular": "anime_kitsu_popular_series",
+    "kitsu.movie.latest": "anime_kitsu_latest_movie",
+    "kitsu.movie.popular": "anime_kitsu_popular_movie",
+    "kitsu.series.ova": "anime_kitsu_ova",
+    "kitsu.series.ova_latest": "anime_kitsu_latest_ova",
+    "kitsu.series.ona": "anime_kitsu_ona",
+    "kitsu.series.ona_latest": "anime_kitsu_latest_ona",
+    "kitsu.series.special": "anime_kitsu_special",
+    "kitsu.series.special_latest": "anime_kitsu_latest_special",
+    "kitsu.movie.search": "anime_kitsu_search_movie",
+    "kitsu.series.search": "anime_kitsu_search_series",
+    "kitsu.series.ova_search": "anime_kitsu_search_ova",
+    "kitsu.series.ona_search": "anime_kitsu_search_ona",
+    "kitsu.series.special_search": "anime_kitsu_search_special"
+};
+
+function getCatalogShapeLookupKey(catalogId) {
+    const normalizedId = String(catalogId || "").trim();
+    if (!normalizedId) return "";
+
+    if (isTop10CatalogId(normalizedId)) {
+        const normalizedTop10 = normalizeTop10ManifestId(normalizedId);
+        const providerMatch = normalizedTop10.match(/^t10\.(movie|series)\.([a-z0-9]+)_top10$/i);
+        if (providerMatch) {
+            return `${providerMatch[2].toLowerCase()}_top10`;
+        }
+        return TOP10_GLOBAL_CATALOG_ID;
+    }
+
+    if (CATALOG_ID_TO_SHAPE_KEY[normalizedId]) {
+        return CATALOG_ID_TO_SHAPE_KEY[normalizedId];
+    }
+
+    if (KITSU_CATALOG_ID_TO_SHAPE_KEY[normalizedId]) {
+        return KITSU_CATALOG_ID_TO_SHAPE_KEY[normalizedId];
+    }
+
+    if (normalizedId.startsWith("tmdb.")) {
+        const parts = normalizedId.split(".");
+        if (parts.length >= 3) {
+            const lastPart = parts[2];
+            if (!lastPart) return "";
+            if (lastPart.endsWith("_catalog")) return lastPart;
+            return `${lastPart}_original`;
+        }
+    }
+
+    return "";
+}
+
+function shouldLandscapeCatalog(catalogId, shapes) {
+    if (!shapes || shapes.size === 0) return false;
+    const lookupKey = getCatalogShapeLookupKey(catalogId);
+    if (!lookupKey) return false;
+    const normalizedKey = normalizeConfiguredCatalogEntryKey(lookupKey);
+    return !!(normalizedKey && shapes.has(normalizedKey));
+}
+
+function applyLandscapeToMetas(metas, shouldLandscape) {
+    if (!shouldLandscape || !Array.isArray(metas)) return metas;
+    metas.forEach(meta => {
+        if (meta && typeof meta === "object") {
+            if (meta.textBackdrop) {
+                meta.posterShape = "landscape";
+                meta.poster = meta.textBackdrop;
+            }
+        }
+    });
+    return metas;
 }
 const KITSU_BASE_URL = "https://kitsu.io/api/edge";
 const ANIME_MAPPING_BASE_URL = "https://animemapping.stremio.dpdns.org";
@@ -1501,7 +1657,11 @@ async function mapTop10EntryToMeta(entry, requestedType, config = null) {
 
     const details = await fetchTmdbDetails(requestedType === "series" ? "tv" : "movie", tmdbId, config);
     if (details) {
-        return transformToMeta(details, requestedType, config, { includeVideos: false });
+        const meta = await transformToMeta(details, requestedType, config, { includeVideos: false });
+        if (meta) {
+            meta.textBackdrop = getTextBackdropFromDetails(details) || undefined;
+        }
+        return meta;
     }
 
     return buildFallbackTop10CatalogMeta(entry, requestedType, tmdbId, config);
@@ -3188,7 +3348,7 @@ Object.entries(SLUG_TO_PROVIDER).forEach(([slug, name]) => {
 
 const manifest = {
     id: "org.bestia.easycatalogs",
-    version: "1.0.51",
+    version: "1.0.52",
     name: "Easy Catalogs",
     description: "Easy Catalogs per Stremio",
     behaviorHints: {
@@ -3935,16 +4095,18 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     const allowFuture = id.includes("upcoming");
     const config = getRequestConfig();
     const resolvedExtra = extra || {};
+    const catalogShapes = getConfiguredCatalogShapes(config);
+    const landscapeForCatalog = shouldLandscapeCatalog(id, catalogShapes);
     
     try {
         if (isKitsuCatalogId(id)) {
             const metas = await fetchKitsuCatalogMetas(id, type, resolvedExtra, config);
-            return { metas };
+            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
         }
 
         if (isTop10CatalogId(id)) {
             const metas = await fetchTop10CatalogMetas(id, type, resolvedExtra, config);
-            return { metas };
+            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
         }
 
         let endpoint = null;
@@ -4017,7 +4179,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
                     ? sortMetasByReleaseDesc(metas)
                     : metas;
                 console.log(`[Easy Catalogs] Search debug: query="${query}" type=${type} catalog=${id} results=${results.length} metas=${metas.length}`);
-                return { metas: orderedMetas };
+                return { metas: applyLandscapeToMetas(orderedMetas, landscapeForCatalog) };
 
             } catch (e) {
                 console.error(`[Easy Catalogs] Search Error: ${e.message}`);
@@ -4325,7 +4487,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             }
 
             if (mergedAttempted) {
-                return { metas: metas.slice(0, 20) };
+                return { metas: applyLandscapeToMetas(metas.slice(0, 20), landscapeForCatalog) };
             }
         }
 
@@ -4365,7 +4527,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             }
         }
 
-        return { metas: metas };
+        return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
 
     } catch (error) {
         console.error("[Easy Catalogs] Error:", error);
@@ -4435,6 +4597,7 @@ app.get('/manifest.json', (req, res) => {
     
     const config = getRequestConfig();
     const customCatalogNames = getConfiguredCatalogNames(config);
+    const customCatalogShapes = getConfiguredCatalogShapes(config);
     
     let filteredCatalogs = [];
     
@@ -4521,7 +4684,11 @@ app.get('/manifest.json', (req, res) => {
                     const cat = fullCatalogs.find(c => c.id === catalogId);
                     if (!cat) return;
 
-                    const resolvedCatalog = applyConfiguredCatalogName(cat, lookupKey, customCatalogNames);
+                    const resolvedCatalog = applyConfiguredCatalogShape(
+                        applyConfiguredCatalogName(cat, lookupKey, customCatalogNames),
+                        lookupKey,
+                        customCatalogShapes
+                    );
                     if (isDiscoverOnly) {
                         const catClone = { ...resolvedCatalog, extra: [...(resolvedCatalog.extra || [])] };
                         catClone.extra.push({ name: "discover", isRequired: true, options: ["Only"] });
@@ -4533,7 +4700,11 @@ app.get('/manifest.json', (req, res) => {
             } else if (standardMap[lookupKey]) {
                 const cat = fullCatalogs.find(c => c.id === standardMap[lookupKey]);
                 if (cat) {
-                    const resolvedCatalog = applyConfiguredCatalogName(cat, lookupKey, customCatalogNames);
+                    const resolvedCatalog = applyConfiguredCatalogShape(
+                        applyConfiguredCatalogName(cat, lookupKey, customCatalogNames),
+                        lookupKey,
+                        customCatalogShapes
+                    );
                     if (isDiscoverOnly) {
                         // Clone catalog to avoid mutating global state and add required filter
                         const catClone = { ...resolvedCatalog, extra: [...(resolvedCatalog.extra || [])] };
@@ -4561,7 +4732,11 @@ app.get('/manifest.json', (req, res) => {
                 });
                 
                 matching.forEach(m => {
-                    const resolvedCatalog = applyConfiguredCatalogName(m, lookupKey, customCatalogNames);
+                    const resolvedCatalog = applyConfiguredCatalogShape(
+                        applyConfiguredCatalogName(m, lookupKey, customCatalogNames),
+                        lookupKey,
+                        customCatalogShapes
+                    );
                     if (isDiscoverOnly) {
                         const mClone = { ...resolvedCatalog, extra: [...(resolvedCatalog.extra || [])] };
                         mClone.extra.push({ name: "discover", isRequired: true, options: ["Only"] });
