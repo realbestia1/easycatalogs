@@ -685,9 +685,10 @@ function applyLandscapeToMetas(metas, shouldLandscape) {
     if (!shouldLandscape || !Array.isArray(metas)) return metas;
     metas.forEach(meta => {
         if (meta && typeof meta === "object") {
-            if (meta.textBackdrop) {
-                meta.posterShape = "landscape";
-                meta.poster = meta.textBackdrop;
+            const landscapeImage = meta.textBackdrop || meta.background;
+            meta.posterShape = "landscape";
+            if (landscapeImage) {
+                meta.poster = landscapeImage;
             }
         }
     });
