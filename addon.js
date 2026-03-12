@@ -264,13 +264,215 @@ function usesKitsuAnimeIds(catalogId) {
     return false;
 }
 
+const ERDB_RATING_PROVIDERS = new Set([
+    "tmdb",
+    "mdblist",
+    "imdb",
+    "tomatoes",
+    "tomatoesaudience",
+    "letterboxd",
+    "metacritic",
+    "metacriticuser",
+    "trakt",
+    "rogerebert",
+    "myanimelist",
+    "anilist",
+    "kitsu"
+]);
+const ERDB_RATING_STYLES = new Set(["glass", "square", "plain"]);
+const ERDB_IMAGE_TEXTS = new Set(["original", "clean", "alternative"]);
+const ERDB_POSTER_LAYOUTS = new Set(["top", "bottom", "left", "right", "top-bottom", "left-right"]);
+const ERDB_BACKDROP_LAYOUTS = new Set(["center", "right", "right-vertical"]);
+
+function normalizeErdbBaseUrl(value) {
+    if (typeof value !== "string") return "";
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return trimmed.replace(/\/+$/g, "");
+}
+
+function normalizeErdbRatings(rawRatings) {
+    if (!rawRatings) return [];
+    const values = Array.isArray(rawRatings)
+        ? rawRatings
+        : typeof rawRatings === "string"
+            ? rawRatings.split(",")
+            : [];
+    return values
+        .map(value => String(value || "").trim().toLowerCase())
+        .filter(value => ERDB_RATING_PROVIDERS.has(value));
+}
+
+function normalizeErdbStyle(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_RATING_STYLES.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbImageText(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_IMAGE_TEXTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbPosterLayout(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_POSTER_LAYOUTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbBackdropLayout(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_BACKDROP_LAYOUTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbLang(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) return "";
+    return /^[a-z]{2}$/.test(normalized) ? normalized : "";
+}
+
+function normalizeErdbId(value) {
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return null;
+
+    const imdbMatch = rawValue.match(/^tt\d+$/i);
+    if (imdbMatch) return rawValue.toLowerCase();
+
+    const providerMatch = rawValue.match(/^(tmdb|kitsu|anilist|myanimelist):(\d+)$/i);
+    if (providerMatch) {
+        return `${providerMatch[1].toLowerCase()}:${providerMatch[2]}`;
+    }
+
+    return null;
+}
+
+function resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride = null) {
+    const overrideId = normalizeErdbId(mediaIdOverride);
+    if (overrideId) return overrideId;
+
+    const normalizedImdb = normalizeImdbId(imdbId);
+    if (normalizedImdb) return normalizedImdb;
+
+    const tmdbValue = String(tmdbId || "").trim();
+    if (!tmdbValue) return null;
+    if (tmdbValue.toLowerCase().startsWith("tmdb:")) {
+        return normalizeErdbId(tmdbValue);
+    }
+    if (/^\d+$/.test(tmdbValue)) {
+        return `tmdb:${tmdbValue}`;
+    }
+    return null;
+}
+
+function getErdbConfig(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const rawConfig = resolvedConfig && resolvedConfig.erdb;
+    if (!rawConfig || typeof rawConfig !== "object") return null;
+
+    const baseUrl = normalizeErdbBaseUrl(rawConfig.baseUrl);
+    const tmdbKey = typeof rawConfig.tmdbKey === "string" ? rawConfig.tmdbKey.trim() : "";
+    const mdblistKey = typeof rawConfig.mdblistKey === "string" ? rawConfig.mdblistKey.trim() : "";
+
+    if (!baseUrl || !tmdbKey || !mdblistKey) return null;
+
+    const ratings = normalizeErdbRatings(rawConfig.ratings);
+    const lang = normalizeErdbLang(rawConfig.lang);
+    const ratingStyle = normalizeErdbStyle(rawConfig.ratingStyle);
+    const imageText = normalizeErdbImageText(rawConfig.imageText);
+    const posterRatingsLayout = normalizeErdbPosterLayout(rawConfig.posterRatingsLayout);
+    const backdropRatingsLayout = normalizeErdbBackdropLayout(rawConfig.backdropRatingsLayout);
+    const maxPerSideRaw = rawConfig.posterRatingsMaxPerSide;
+    const maxPerSideParsed = parseInt(maxPerSideRaw, 10);
+    const posterRatingsMaxPerSide = Number.isFinite(maxPerSideParsed) && maxPerSideParsed >= 1 && maxPerSideParsed <= 20
+        ? maxPerSideParsed
+        : null;
+
+    const enabledTypesRaw = rawConfig.enabledTypes || {};
+    const enabledTypes = {
+        poster: enabledTypesRaw.poster !== false,
+        backdrop: enabledTypesRaw.backdrop !== false,
+        logo: enabledTypesRaw.logo !== false
+    };
+
+    const overridesRaw = rawConfig.ratingStyleOverrides || {};
+    const ratingStyleOverrides = {
+        poster: normalizeErdbStyle(overridesRaw.poster),
+        backdrop: normalizeErdbStyle(overridesRaw.backdrop),
+        logo: normalizeErdbStyle(overridesRaw.logo)
+    };
+
+    const imageTextOverridesRaw = rawConfig.imageTextOverrides || {};
+    const imageTextOverrides = {
+        poster: normalizeErdbImageText(imageTextOverridesRaw.poster),
+        backdrop: normalizeErdbImageText(imageTextOverridesRaw.backdrop)
+    };
+
+    return {
+        baseUrl,
+        tmdbKey,
+        mdblistKey,
+        ratings,
+        lang,
+        ratingStyle,
+        imageText,
+        posterRatingsLayout,
+        posterRatingsMaxPerSide,
+        backdropRatingsLayout,
+        enabledTypes,
+        ratingStyleOverrides,
+        imageTextOverrides
+    };
+}
+
+function buildErdbUrl(config, assetType, erdbId) {
+    if (!config || !erdbId) return null;
+
+    const query = new URLSearchParams();
+    query.set("tmdbKey", config.tmdbKey);
+    query.set("mdblistKey", config.mdblistKey);
+    if (Array.isArray(config.ratings) && config.ratings.length > 0) {
+        query.set("ratings", config.ratings.join(","));
+    }
+    if (config.lang) query.set("lang", config.lang);
+    const styleOverride = config.ratingStyleOverrides && config.ratingStyleOverrides[assetType];
+    const ratingStyle = styleOverride || config.ratingStyle;
+    if (ratingStyle) query.set("ratingStyle", ratingStyle);
+    const imageTextOverride = config.imageTextOverrides && config.imageTextOverrides[assetType];
+    const imageText = imageTextOverride || config.imageText;
+    if (imageText) query.set("imageText", imageText);
+
+    if (assetType === "poster") {
+        if (config.posterRatingsLayout) {
+            query.set("posterRatingsLayout", config.posterRatingsLayout);
+        }
+        if (config.posterRatingsMaxPerSide) {
+            query.set("posterRatingsMaxPerSide", String(config.posterRatingsMaxPerSide));
+        }
+    }
+
+    if (assetType === "backdrop" && config.backdropRatingsLayout) {
+        query.set("backdropRatingsLayout", config.backdropRatingsLayout);
+    }
+
+    const baseUrl = config.baseUrl.replace(/\/+$/g, "");
+    const encodedId = encodeURIComponent(erdbId);
+    return `${baseUrl}/${assetType}/${encodedId}.jpg?${query.toString()}`;
+}
+
 function getConfiguredAssetUrl(config, assetType, imdbId, tmdbId, mediaIdOverride = null) {
-    if (!config || typeof config !== "object") return null;
+    const resolvedConfig = getRequestConfig(config);
+    if (!resolvedConfig || typeof resolvedConfig !== "object") return null;
+
+    const erdbConfig = getErdbConfig(resolvedConfig);
+    if (erdbConfig) {
+        if (!erdbConfig.enabledTypes[assetType]) return null;
+        const erdbId = resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride);
+        if (!erdbId) return null;
+        return buildErdbUrl(erdbConfig, assetType, erdbId);
+    }
 
     if (assetType !== "poster") return null;
 
-    const topStreamingKey = typeof config.topStreamingKey === "string"
-        ? config.topStreamingKey.trim()
+    const topStreamingKey = typeof resolvedConfig.topStreamingKey === "string"
+        ? resolvedConfig.topStreamingKey.trim()
         : "";
     if (topStreamingKey) {
         if (imdbId) {
