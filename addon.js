@@ -329,6 +329,17 @@ function normalizeErdbLang(value) {
     return /^[a-z]{2}$/.test(normalized) ? normalized : "";
 }
 
+function decodeErdbConfig(value) {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    try {
+        return JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8"));
+    } catch (err) {
+        return null;
+    }
+}
+
 function normalizeErdbId(value) {
     const rawValue = String(value || "").trim();
     if (!rawValue) return null;
@@ -364,7 +375,10 @@ function resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride = null) {
 
 function getErdbConfig(config = null) {
     const resolvedConfig = getRequestConfig(config);
-    const rawConfig = resolvedConfig && resolvedConfig.erdb;
+    const encodedConfig = resolvedConfig && typeof resolvedConfig.erdbConfig === "string"
+        ? resolvedConfig.erdbConfig
+        : "";
+    const rawConfig = decodeErdbConfig(encodedConfig);
     if (!rawConfig || typeof rawConfig !== "object") return null;
 
     const baseUrl = normalizeErdbBaseUrl(rawConfig.baseUrl);
@@ -375,8 +389,11 @@ function getErdbConfig(config = null) {
 
     const ratings = normalizeErdbRatings(rawConfig.ratings);
     const lang = normalizeErdbLang(rawConfig.lang);
-    const ratingStyle = normalizeErdbStyle(rawConfig.ratingStyle);
-    const imageText = normalizeErdbImageText(rawConfig.imageText);
+    const posterRatingStyle = normalizeErdbStyle(rawConfig.posterRatingStyle);
+    const backdropRatingStyle = normalizeErdbStyle(rawConfig.backdropRatingStyle);
+    const logoRatingStyle = normalizeErdbStyle(rawConfig.logoRatingStyle);
+    const posterImageText = normalizeErdbImageText(rawConfig.posterImageText);
+    const backdropImageText = normalizeErdbImageText(rawConfig.backdropImageText);
     const posterRatingsLayout = normalizeErdbPosterLayout(rawConfig.posterRatingsLayout);
     const backdropRatingsLayout = normalizeErdbBackdropLayout(rawConfig.backdropRatingsLayout);
     const maxPerSideRaw = rawConfig.posterRatingsMaxPerSide;
@@ -385,24 +402,13 @@ function getErdbConfig(config = null) {
         ? maxPerSideParsed
         : null;
 
-    const enabledTypesRaw = rawConfig.enabledTypes || {};
+    const enabledTypesRaw = resolvedConfig && typeof resolvedConfig.erdbTypes === "object"
+        ? resolvedConfig.erdbTypes
+        : {};
     const enabledTypes = {
         poster: enabledTypesRaw.poster !== false,
         backdrop: enabledTypesRaw.backdrop !== false,
         logo: enabledTypesRaw.logo !== false
-    };
-
-    const overridesRaw = rawConfig.ratingStyleOverrides || {};
-    const ratingStyleOverrides = {
-        poster: normalizeErdbStyle(overridesRaw.poster),
-        backdrop: normalizeErdbStyle(overridesRaw.backdrop),
-        logo: normalizeErdbStyle(overridesRaw.logo)
-    };
-
-    const imageTextOverridesRaw = rawConfig.imageTextOverrides || {};
-    const imageTextOverrides = {
-        poster: normalizeErdbImageText(imageTextOverridesRaw.poster),
-        backdrop: normalizeErdbImageText(imageTextOverridesRaw.backdrop)
     };
 
     return {
@@ -411,14 +417,15 @@ function getErdbConfig(config = null) {
         mdblistKey,
         ratings,
         lang,
-        ratingStyle,
-        imageText,
+        posterRatingStyle,
+        backdropRatingStyle,
+        logoRatingStyle,
+        posterImageText,
+        backdropImageText,
         posterRatingsLayout,
         posterRatingsMaxPerSide,
         backdropRatingsLayout,
-        enabledTypes,
-        ratingStyleOverrides,
-        imageTextOverrides
+        enabledTypes
     };
 }
 
@@ -432,12 +439,17 @@ function buildErdbUrl(config, assetType, erdbId) {
         query.set("ratings", config.ratings.join(","));
     }
     if (config.lang) query.set("lang", config.lang);
-    const styleOverride = config.ratingStyleOverrides && config.ratingStyleOverrides[assetType];
-    const ratingStyle = styleOverride || config.ratingStyle;
+    const ratingStyle = assetType === "poster"
+        ? config.posterRatingStyle
+        : assetType === "backdrop"
+            ? config.backdropRatingStyle
+            : config.logoRatingStyle;
     if (ratingStyle) query.set("ratingStyle", ratingStyle);
-    const imageTextOverride = config.imageTextOverrides && config.imageTextOverrides[assetType];
-    const imageText = imageTextOverride || config.imageText;
-    if (imageText) query.set("imageText", imageText);
+
+    if (assetType !== "logo") {
+        const imageText = assetType === "backdrop" ? config.backdropImageText : config.posterImageText;
+        if (imageText) query.set("imageText", imageText);
+    }
 
     if (assetType === "poster") {
         if (config.posterRatingsLayout) {
@@ -883,14 +895,23 @@ function shouldLandscapeCatalog(catalogId, shapes) {
     return !!(normalizedKey && shapes.has(normalizedKey));
 }
 
-function applyLandscapeToMetas(metas, shouldLandscape) {
+function applyLandscapeToMetas(metas, shouldLandscape, config = null) {
     if (!shouldLandscape || !Array.isArray(metas)) return metas;
+    const erdbConfig = getErdbConfig(config);
+    const erdbPosterEnabled = !!(erdbConfig && erdbConfig.enabledTypes && erdbConfig.enabledTypes.poster);
+    const erdbBackdropEnabled = !!(erdbConfig && erdbConfig.enabledTypes && erdbConfig.enabledTypes.backdrop);
     metas.forEach(meta => {
         if (meta && typeof meta === "object") {
-            const landscapeImage = meta.textBackdrop || meta.background;
+            const landscapeImage = erdbBackdropEnabled
+                ? (meta.background || meta.textBackdrop)
+                : (meta.textBackdrop || meta.background);
             meta.posterShape = "landscape";
             if (landscapeImage) {
-                meta.poster = landscapeImage;
+                if (erdbBackdropEnabled) {
+                    meta.poster = landscapeImage;
+                } else if (!erdbPosterEnabled) {
+                    meta.poster = landscapeImage;
+                }
             }
         }
     });
@@ -4304,12 +4325,12 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     try {
         if (isKitsuCatalogId(id)) {
             const metas = await fetchKitsuCatalogMetas(id, type, resolvedExtra, config);
-            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
+            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
         }
 
         if (isTop10CatalogId(id)) {
             const metas = await fetchTop10CatalogMetas(id, type, resolvedExtra, config);
-            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
+            return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
         }
 
         let endpoint = null;
@@ -4382,7 +4403,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
                     ? sortMetasByReleaseDesc(metas)
                     : metas;
                 console.log(`[Easy Catalogs] Search debug: query="${query}" type=${type} catalog=${id} results=${results.length} metas=${metas.length}`);
-                return { metas: applyLandscapeToMetas(orderedMetas, landscapeForCatalog) };
+                return { metas: applyLandscapeToMetas(orderedMetas, landscapeForCatalog, config) };
 
             } catch (e) {
                 console.error(`[Easy Catalogs] Search Error: ${e.message}`);
@@ -4690,7 +4711,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             }
 
             if (mergedAttempted) {
-                return { metas: applyLandscapeToMetas(metas.slice(0, 20), landscapeForCatalog) };
+                return { metas: applyLandscapeToMetas(metas.slice(0, 20), landscapeForCatalog, config) };
             }
         }
 
@@ -4730,7 +4751,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             }
         }
 
-        return { metas: applyLandscapeToMetas(metas, landscapeForCatalog) };
+        return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
 
     } catch (error) {
         console.error("[Easy Catalogs] Error:", error);

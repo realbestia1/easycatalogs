@@ -1766,17 +1766,48 @@
                                     <a href="https://api.top-streaming.stream" target="_blank">Richiedi su api.top-streaming.stream</a>
                                 </div>
                             </div>
-                            <div class="erdb-setup-card">
-                                <div class="erdb-setup-copy">
-                                    <div class="erdb-setup-title">ERDB Artwork</div>
-                                    <div class="erdb-setup-subtitle">
-                                        Configura poster, backdrop e logo con rating live tramite ERDB Stateless API.
-                                    </div>
+                            <div class="input-group" style="margin-top: 1rem;">
+                                <label for="erdbConfig">ERDB Config (base64url)</label>
+                                <input type="text" id="erdbConfig" placeholder="Incolla la stringa base64url di ERDB">
+                                <div class="input-hint">
+                                    Genera la configurazione su ERDB e incolla qui.
+                                    Verranno usati baseUrl e chiavi contenute nel config.
+                                    <a href="https://github.com/realbestia1/erdb" target="_blank" rel="noopener">github.com/realbestia1/erdb</a>
                                 </div>
-                                <button type="button" class="btn btn-secondary" id="erdb-setup-btn">Setup</button>
                             </div>
-                            <div class="input-hint" style="margin-top: 0.6rem;">
-                                Se vuoi usare ERDB: <a href="https://github.com/realbestia1/erdb" target="_blank" rel="noopener">github.com/realbestia1/erdb</a>
+                            <div class="input-group" id="erdbTypeToggles" style="display: none;">
+                                <label>ERDB Artwork</label>
+                                <div class="feature-toggle-row">
+                                    <label class="feature-toggle-copy" for="erdbEnablePoster">
+                                        <div class="feature-toggle-title">Poster</div>
+                                        <div class="feature-toggle-hint">Usa ERDB per i poster.</div>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="erdbEnablePoster" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="feature-toggle-row">
+                                    <label class="feature-toggle-copy" for="erdbEnableBackdrop">
+                                        <div class="feature-toggle-title">Backdrop</div>
+                                        <div class="feature-toggle-hint">Usa ERDB per i backdrop.</div>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="erdbEnableBackdrop" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="feature-toggle-row">
+                                    <label class="feature-toggle-copy" for="erdbEnableLogo">
+                                        <div class="feature-toggle-title">Logo</div>
+                                        <div class="feature-toggle-hint">Usa ERDB per i logo.</div>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="erdbEnableLogo" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="input-hint">Se un tipo è disattivato, l'addon mantiene l'artwork originale.</div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
                                 <div class="feature-toggle-row">
@@ -1945,263 +1976,6 @@
         <span>Link copiato!</span>
     </div>
 
-    <div id="erdb-modal" class="modal" role="dialog" aria-hidden="true" aria-labelledby="erdb-modal-title">
-        <div class="modal-backdrop" id="erdb-modal-backdrop"></div>
-        <div class="modal-card" role="document">
-            <div class="modal-header">
-                <div>
-                    <div class="modal-title" id="erdb-modal-title">ERDB Artwork Setup</div>
-                    <div class="modal-subtitle">Personalizza poster, backdrop e logo con overlay rating dinamici.</div>
-                </div>
-                <button type="button" class="modal-close" id="erdb-modal-close" aria-label="Chiudi">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="erdb-grid">
-                    <div class="erdb-form">
-                        <div class="erdb-form-section">
-                            <div class="erdb-section-title">Connessione</div>
-                            <div class="input-group">
-                                <label for="erdbBaseUrl">ERDB Base URL (richiesto)</label>
-                                <input type="text" id="erdbBaseUrl" placeholder="http://localhost:3000">
-                                <div class="input-hint">Inserisci l'URL del server ERDB Stateless API (deve rimanere modificabile).</div>
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbTmdbKey">TMDB API Key (richiesto)</label>
-                                <input type="text" id="erdbTmdbKey" placeholder="La tua chiave TMDB v3...">
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbMdblistKey">MDBList API Key (richiesto)</label>
-                                <input type="text" id="erdbMdblistKey" placeholder="La tua chiave MDBList...">
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbPreviewId">Preview ID</label>
-                                <input type="text" id="erdbPreviewId" placeholder="tt0133093 o tmdb:603">
-                                <div class="input-hint">ID usato per il live preview (IMDb, TMDB, Kitsu, AniList, MAL).</div>
-                            </div>
-                        </div>
-
-                        <div class="erdb-form-section">
-                            <div class="erdb-section-title">Globali</div>
-                            <div class="erdb-inline-row">
-                                <div class="input-group">
-                                    <label for="erdbLang">Lingua (ISO 639-1)</label>
-                                    <input type="text" id="erdbLang" list="erdb-lang-list" placeholder="en">
-                                </div>
-                                <div class="input-group">
-                                    <label for="erdbRatingStyle">Stile rating</label>
-                                    <select id="erdbRatingStyle">
-                                        <option value="glass">Glass</option>
-                                        <option value="square">Square</option>
-                                        <option value="plain">Plain</option>
-                                    </select>
-                                </div>
-                                <div class="input-group">
-                                    <label for="erdbImageText">Image Text</label>
-                                    <select id="erdbImageText">
-                                        <option value="original">Original</option>
-                                        <option value="clean">Clean</option>
-                                        <option value="alternative">Alternative</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label>Ratings (multi-selezione)</label>
-                                <div class="erdb-inline-row">
-                                    <button type="button" class="catalog-action-btn" id="erdb-ratings-all-btn">Tutti</button>
-                                    <button type="button" class="catalog-action-btn" id="erdb-ratings-none-btn">Nessuno</button>
-                                </div>
-                                <div class="erdb-rating-grid" id="erdb-rating-grid">
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="tmdb" id="erdb-rating-tmdb">TMDB</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="mdblist" id="erdb-rating-mdblist">MDBList</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="imdb" id="erdb-rating-imdb">IMDb</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="tomatoes" id="erdb-rating-tomatoes">Rotten</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="tomatoesaudience" id="erdb-rating-tomatoesaudience">Audience</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="letterboxd" id="erdb-rating-letterboxd">Letterboxd</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="metacritic" id="erdb-rating-metacritic">Metacritic</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="metacriticuser" id="erdb-rating-metacriticuser">Meta User</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="trakt" id="erdb-rating-trakt">Trakt</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="rogerebert" id="erdb-rating-rogerebert">Roger Ebert</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="myanimelist" id="erdb-rating-myanimelist">MyAnimeList</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="anilist" id="erdb-rating-anilist">AniList</label>
-                                    <label class="erdb-rating-option"><input type="checkbox" data-rating="kitsu" id="erdb-rating-kitsu">Kitsu</label>
-                                </div>
-                                <div class="input-hint">Se lasci tutto selezionato o deselezionato, ERDB usa automaticamente tutte le fonti.</div>
-                            </div>
-                        </div>
-
-                        <div class="erdb-form-section">
-                            <div class="erdb-section-title">Tipi & Layout</div>
-                            <div class="input-group">
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnablePoster">
-                                        <div class="feature-toggle-title">Poster</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i poster.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnablePoster" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnableBackdrop">
-                                        <div class="feature-toggle-title">Backdrop</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i backdrop.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnableBackdrop" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnableLogo">
-                                        <div class="feature-toggle-title">Logo</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i logo.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnableLogo" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label>Override ratingStyle per tipo</label>
-                                <div class="erdb-inline-row">
-                                    <div class="input-group">
-                                        <label for="erdbPosterStyleOverride">Poster</label>
-                                        <select id="erdbPosterStyleOverride">
-                                            <option value="">Usa globale</option>
-                                            <option value="glass">Glass</option>
-                                            <option value="square">Square</option>
-                                            <option value="plain">Plain</option>
-                                        </select>
-                                    </div>
-                                    <div class="input-group">
-                                        <label for="erdbBackdropStyleOverride">Backdrop</label>
-                                        <select id="erdbBackdropStyleOverride">
-                                            <option value="">Usa globale</option>
-                                            <option value="glass">Glass</option>
-                                            <option value="square">Square</option>
-                                            <option value="plain">Plain</option>
-                                        </select>
-                                    </div>
-                                    <div class="input-group">
-                                        <label for="erdbLogoStyleOverride">Logo</label>
-                                        <select id="erdbLogoStyleOverride">
-                                            <option value="">Usa globale</option>
-                                            <option value="glass">Glass</option>
-                                            <option value="square">Square</option>
-                                            <option value="plain">Plain</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label>Override Image Text per tipo</label>
-                                <div class="erdb-inline-row">
-                                    <div class="input-group">
-                                        <label for="erdbPosterImageTextOverride">Poster</label>
-                                        <select id="erdbPosterImageTextOverride">
-                                            <option value="">Usa globale</option>
-                                            <option value="original">Original</option>
-                                            <option value="clean">Clean</option>
-                                            <option value="alternative">Alternative</option>
-                                        </select>
-                                    </div>
-                                    <div class="input-group">
-                                        <label for="erdbBackdropImageTextOverride">Backdrop</label>
-                                        <select id="erdbBackdropImageTextOverride">
-                                            <option value="">Usa globale</option>
-                                            <option value="original">Original</option>
-                                            <option value="clean">Clean</option>
-                                            <option value="alternative">Alternative</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbPosterLayout">Layout poster</label>
-                                <select id="erdbPosterLayout">
-                                    <option value="top">Top</option>
-                                    <option value="bottom">Bottom</option>
-                                    <option value="left">Left</option>
-                                    <option value="right">Right</option>
-                                    <option value="top-bottom">Top-Bottom</option>
-                                    <option value="left-right">Left-Right</option>
-                                </select>
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbPosterMax">Poster Max Ratings Per Side</label>
-                                <input type="number" id="erdbPosterMax" min="1" max="20" placeholder="Auto">
-                                <div class="input-hint">Lascia vuoto per Auto.</div>
-                            </div>
-                            <div class="input-group">
-                                <label for="erdbBackdropLayout">Layout backdrop</label>
-                                <select id="erdbBackdropLayout">
-                                    <option value="center">Center</option>
-                                    <option value="right">Right</option>
-                                    <option value="right-vertical">Right Vertical</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="erdb-preview">
-                        <div class="erdb-preview-card">
-                            <div class="erdb-preview-title">Poster Preview</div>
-                            <div class="erdb-preview-media" data-preview="poster">
-                                <div class="erdb-preview-placeholder">Inserisci base URL e chiavi per vedere il preview.</div>
-                                <img id="erdbPreviewPoster" alt="ERDB poster preview" style="display:none;">
-                            </div>
-                            <div class="erdb-preview-url" id="erdbPreviewPosterUrl"></div>
-                        </div>
-                        <div class="erdb-preview-card">
-                            <div class="erdb-preview-title">Backdrop Preview</div>
-                            <div class="erdb-preview-media" data-preview="backdrop">
-                                <div class="erdb-preview-placeholder">Inserisci base URL e chiavi per vedere il preview.</div>
-                                <img id="erdbPreviewBackdrop" alt="ERDB backdrop preview" style="display:none;">
-                            </div>
-                            <div class="erdb-preview-url" id="erdbPreviewBackdropUrl"></div>
-                        </div>
-                        <div class="erdb-preview-card">
-                            <div class="erdb-preview-title">Logo Preview</div>
-                            <div class="erdb-preview-media" data-preview="logo">
-                                <div class="erdb-preview-placeholder">Inserisci base URL e chiavi per vedere il preview.</div>
-                                <img id="erdbPreviewLogo" alt="ERDB logo preview" style="display:none;">
-                            </div>
-                            <div class="erdb-preview-url" id="erdbPreviewLogoUrl"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <div class="modal-footer-note">Le modifiche si salvano nel link configurato.</div>
-                <button type="button" class="btn btn-primary" id="erdb-modal-done">Fatto</button>
-            </div>
-        </div>
-    </div>
-
-    <datalist id="erdb-lang-list">
-        <option value="en"></option>
-        <option value="it"></option>
-        <option value="fr"></option>
-        <option value="es"></option>
-        <option value="de"></option>
-        <option value="pt"></option>
-        <option value="ru"></option>
-        <option value="ja"></option>
-        <option value="ko"></option>
-        <option value="zh"></option>
-        <option value="ar"></option>
-        <option value="hi"></option>
-        <option value="tr"></option>
-        <option value="nl"></option>
-        <option value="sv"></option>
-        <option value="no"></option>
-        <option value="da"></option>
-        <option value="fi"></option>
-        <option value="pl"></option>
-    </datalist>
-
     <script>
         const PROVIDERS = [
             { name: "Netflix", slug: "netflix" },
@@ -2231,28 +2005,6 @@
         const TOP10_PROVIDER_IDS = PROVIDERS
             .filter(provider => Boolean(TOP10_PROVIDER_SLUGS[provider.slug]))
             .map(provider => provider.slug);
-        const ERDB_DEFAULT_BASE_URL = "http://localhost:3000";
-        const ERDB_DEFAULT_PREVIEW_ID = "tt0133093";
-        const ERDB_RATING_PROVIDERS = [
-            "tmdb",
-            "mdblist",
-            "imdb",
-            "tomatoes",
-            "tomatoesaudience",
-            "letterboxd",
-            "metacritic",
-            "metacriticuser",
-            "trakt",
-            "rogerebert",
-            "myanimelist",
-            "anilist",
-            "kitsu"
-        ];
-        const ERDB_STYLES = ["glass", "square", "plain"];
-        const ERDB_IMAGE_TEXTS = ["original", "clean", "alternative"];
-        const ERDB_POSTER_LAYOUTS = ["top", "bottom", "left", "right", "top-bottom", "left-right"];
-        const ERDB_BACKDROP_LAYOUTS = ["center", "right", "right-vertical"];
-
         function decodeBase64Literal(value) {
             return atob(String(value || ""));
         }
@@ -2417,356 +2169,28 @@
                 return {};
             }
         }
+        function applyErdbConfigFields(resolvedConfig) {
+            const config = resolvedConfig && typeof resolvedConfig === 'object' ? resolvedConfig : {};
+            const erdbConfigValue = typeof config.erdbConfig === 'string' ? config.erdbConfig.trim() : '';
+            const erdbConfigInput = document.getElementById('erdbConfig');
+            if (erdbConfigInput) erdbConfigInput.value = erdbConfigValue;
 
-        function normalizeErdbRatingsConfig(rawRatings) {
-            if (!rawRatings) return [];
-            const values = Array.isArray(rawRatings)
-                ? rawRatings
-                : typeof rawRatings === "string"
-                    ? rawRatings.split(",")
-                    : [];
-            return values
-                .map(value => String(value || "").trim().toLowerCase())
-                .filter(value => ERDB_RATING_PROVIDERS.includes(value));
+            const enabledTypes = config.erdbTypes && typeof config.erdbTypes === 'object' ? config.erdbTypes : {};
+            const posterToggle = document.getElementById('erdbEnablePoster');
+            const backdropToggle = document.getElementById('erdbEnableBackdrop');
+            const logoToggle = document.getElementById('erdbEnableLogo');
+            if (posterToggle) posterToggle.checked = enabledTypes.poster !== false;
+            if (backdropToggle) backdropToggle.checked = enabledTypes.backdrop !== false;
+            if (logoToggle) logoToggle.checked = enabledTypes.logo !== false;
+            updateErdbToggleVisibility();
         }
 
-        function normalizeErdbStyle(value) {
-            const normalized = String(value || "").trim().toLowerCase();
-            return ERDB_STYLES.includes(normalized) ? normalized : "";
-        }
-
-        function normalizeErdbImageText(value) {
-            const normalized = String(value || "").trim().toLowerCase();
-            return ERDB_IMAGE_TEXTS.includes(normalized) ? normalized : "";
-        }
-
-        function normalizeErdbPosterLayout(value) {
-            const normalized = String(value || "").trim().toLowerCase();
-            return ERDB_POSTER_LAYOUTS.includes(normalized) ? normalized : "";
-        }
-
-        function normalizeErdbBackdropLayout(value) {
-            const normalized = String(value || "").trim().toLowerCase();
-            return ERDB_BACKDROP_LAYOUTS.includes(normalized) ? normalized : "";
-        }
-
-        function normalizeErdbLang(value) {
-            const normalized = String(value || "").trim().toLowerCase();
-            if (!normalized) return "";
-            return /^[a-z]{2}$/.test(normalized) ? normalized : "";
-        }
-
-        function applyErdbConfig(rawConfig) {
-            const config = rawConfig && typeof rawConfig === "object" ? rawConfig : {};
-            const baseUrlValue = typeof config.baseUrl === "string" && config.baseUrl.trim()
-                ? config.baseUrl.trim()
-                : ERDB_DEFAULT_BASE_URL;
-            document.getElementById("erdbBaseUrl").value = baseUrlValue;
-            document.getElementById("erdbTmdbKey").value = typeof config.tmdbKey === "string" ? config.tmdbKey : "";
-            document.getElementById("erdbMdblistKey").value = typeof config.mdblistKey === "string" ? config.mdblistKey : "";
-            document.getElementById("erdbPreviewId").value = ERDB_DEFAULT_PREVIEW_ID;
-
-            const langValue = normalizeErdbLang(config.lang) || "en";
-            document.getElementById("erdbLang").value = langValue;
-
-            const ratingStyleValue = normalizeErdbStyle(config.ratingStyle) || "glass";
-            document.getElementById("erdbRatingStyle").value = ratingStyleValue;
-
-            const imageTextValue = normalizeErdbImageText(config.imageText) || "original";
-            document.getElementById("erdbImageText").value = imageTextValue;
-
-            const posterLayoutValue = normalizeErdbPosterLayout(config.posterRatingsLayout) || "top-bottom";
-            document.getElementById("erdbPosterLayout").value = posterLayoutValue;
-
-            const backdropLayoutValue = normalizeErdbBackdropLayout(config.backdropRatingsLayout) || "center";
-            document.getElementById("erdbBackdropLayout").value = backdropLayoutValue;
-
-            const maxPerSide = parseInt(config.posterRatingsMaxPerSide, 10);
-            document.getElementById("erdbPosterMax").value = Number.isFinite(maxPerSide) && maxPerSide >= 1 && maxPerSide <= 20
-                ? String(maxPerSide)
-                : "";
-
-            const enabledTypes = config.enabledTypes || {};
-            document.getElementById("erdbEnablePoster").checked = enabledTypes.poster !== false;
-            document.getElementById("erdbEnableBackdrop").checked = enabledTypes.backdrop !== false;
-            document.getElementById("erdbEnableLogo").checked = enabledTypes.logo !== false;
-
-            const overrides = config.ratingStyleOverrides || {};
-            document.getElementById("erdbPosterStyleOverride").value = normalizeErdbStyle(overrides.poster);
-            document.getElementById("erdbBackdropStyleOverride").value = normalizeErdbStyle(overrides.backdrop);
-            document.getElementById("erdbLogoStyleOverride").value = normalizeErdbStyle(overrides.logo);
-
-            const imageTextOverrides = config.imageTextOverrides || {};
-            document.getElementById("erdbPosterImageTextOverride").value = normalizeErdbImageText(imageTextOverrides.poster);
-            document.getElementById("erdbBackdropImageTextOverride").value = normalizeErdbImageText(imageTextOverrides.backdrop);
-
-            const selectedRatings = normalizeErdbRatingsConfig(config.ratings);
-            const useAllRatings = selectedRatings.length === 0;
-            ERDB_RATING_PROVIDERS.forEach(provider => {
-                const input = document.getElementById(`erdb-rating-${provider}`);
-                if (input) {
-                    input.checked = useAllRatings || selectedRatings.includes(provider);
-                }
-            });
-        }
-
-        function getErdbFormState() {
-            const baseUrl = document.getElementById("erdbBaseUrl").value.trim();
-            const tmdbKey = document.getElementById("erdbTmdbKey").value.trim();
-            const mdblistKey = document.getElementById("erdbMdblistKey").value.trim();
-            const lang = normalizeErdbLang(document.getElementById("erdbLang").value);
-            const ratingStyle = normalizeErdbStyle(document.getElementById("erdbRatingStyle").value) || "glass";
-            const imageText = normalizeErdbImageText(document.getElementById("erdbImageText").value) || "original";
-            const posterRatingsLayout = normalizeErdbPosterLayout(document.getElementById("erdbPosterLayout").value) || "top-bottom";
-            const backdropRatingsLayout = normalizeErdbBackdropLayout(document.getElementById("erdbBackdropLayout").value) || "center";
-
-            const maxPerSideRaw = document.getElementById("erdbPosterMax").value;
-            const maxPerSideParsed = parseInt(maxPerSideRaw, 10);
-            const posterRatingsMaxPerSide = Number.isFinite(maxPerSideParsed) && maxPerSideParsed >= 1 && maxPerSideParsed <= 20
-                ? maxPerSideParsed
-                : null;
-
-            const ratings = ERDB_RATING_PROVIDERS.filter(provider => {
-                const input = document.getElementById(`erdb-rating-${provider}`);
-                return input && input.checked;
-            });
-
-            const enabledTypes = {
-                poster: document.getElementById("erdbEnablePoster").checked,
-                backdrop: document.getElementById("erdbEnableBackdrop").checked,
-                logo: document.getElementById("erdbEnableLogo").checked
-            };
-
-            const ratingStyleOverrides = {
-                poster: normalizeErdbStyle(document.getElementById("erdbPosterStyleOverride").value),
-                backdrop: normalizeErdbStyle(document.getElementById("erdbBackdropStyleOverride").value),
-                logo: normalizeErdbStyle(document.getElementById("erdbLogoStyleOverride").value)
-            };
-
-            const imageTextOverrides = {
-                poster: normalizeErdbImageText(document.getElementById("erdbPosterImageTextOverride").value),
-                backdrop: normalizeErdbImageText(document.getElementById("erdbBackdropImageTextOverride").value)
-            };
-
-            const previewId = document.getElementById("erdbPreviewId").value.trim() || ERDB_DEFAULT_PREVIEW_ID;
-
-            return {
-                baseUrl,
-                tmdbKey,
-                mdblistKey,
-                ratings,
-                lang,
-                ratingStyle,
-                imageText,
-                posterRatingsLayout,
-                posterRatingsMaxPerSide,
-                backdropRatingsLayout,
-                enabledTypes,
-                ratingStyleOverrides,
-                imageTextOverrides,
-                previewId
-            };
-        }
-
-        function buildErdbConfigFromState(state) {
-            if (!state) return null;
-            const config = {};
-
-            if (state.baseUrl) config.baseUrl = state.baseUrl;
-            if (state.tmdbKey) config.tmdbKey = state.tmdbKey;
-            if (state.mdblistKey) config.mdblistKey = state.mdblistKey;
-
-            if (state.ratings.length > 0 && state.ratings.length !== ERDB_RATING_PROVIDERS.length) {
-                config.ratings = state.ratings;
-            }
-            if (state.lang && state.lang !== "en") config.lang = state.lang;
-            if (state.ratingStyle && state.ratingStyle !== "glass") config.ratingStyle = state.ratingStyle;
-            if (state.imageText && state.imageText !== "original") config.imageText = state.imageText;
-            if (state.posterRatingsLayout && state.posterRatingsLayout !== "top-bottom") {
-                config.posterRatingsLayout = state.posterRatingsLayout;
-            }
-            if (state.posterRatingsMaxPerSide) {
-                config.posterRatingsMaxPerSide = state.posterRatingsMaxPerSide;
-            }
-            if (state.backdropRatingsLayout && state.backdropRatingsLayout !== "center") {
-                config.backdropRatingsLayout = state.backdropRatingsLayout;
-            }
-
-            const enabledTypes = {};
-            if (!state.enabledTypes.poster) enabledTypes.poster = false;
-            if (!state.enabledTypes.backdrop) enabledTypes.backdrop = false;
-            if (!state.enabledTypes.logo) enabledTypes.logo = false;
-            if (Object.keys(enabledTypes).length > 0) config.enabledTypes = enabledTypes;
-
-            const overrides = {};
-            if (state.ratingStyleOverrides.poster) overrides.poster = state.ratingStyleOverrides.poster;
-            if (state.ratingStyleOverrides.backdrop) overrides.backdrop = state.ratingStyleOverrides.backdrop;
-            if (state.ratingStyleOverrides.logo) overrides.logo = state.ratingStyleOverrides.logo;
-            if (Object.keys(overrides).length > 0) config.ratingStyleOverrides = overrides;
-
-            const imageTextOverrides = {};
-            if (state.imageTextOverrides.poster) imageTextOverrides.poster = state.imageTextOverrides.poster;
-            if (state.imageTextOverrides.backdrop) imageTextOverrides.backdrop = state.imageTextOverrides.backdrop;
-            if (Object.keys(imageTextOverrides).length > 0) config.imageTextOverrides = imageTextOverrides;
-
-            return Object.keys(config).length > 0 ? config : null;
-        }
-
-        function buildErdbPreviewUrl(state, type) {
-            if (!state || !state.baseUrl || !state.tmdbKey || !state.mdblistKey) return "";
-            if (!state.enabledTypes[type]) return "";
-
-            const params = new URLSearchParams();
-            params.set("tmdbKey", state.tmdbKey);
-            params.set("mdblistKey", state.mdblistKey);
-            if (state.ratings.length > 0 && state.ratings.length !== ERDB_RATING_PROVIDERS.length) {
-                params.set("ratings", state.ratings.join(","));
-            }
-            if (state.lang) params.set("lang", state.lang);
-            const overrideStyle = state.ratingStyleOverrides[type] || state.ratingStyle;
-            if (overrideStyle) params.set("ratingStyle", overrideStyle);
-            const imageTextOverride = state.imageTextOverrides[type] || state.imageText;
-            if (imageTextOverride) params.set("imageText", imageTextOverride);
-
-            if (type === "poster") {
-                if (state.posterRatingsLayout) {
-                    params.set("posterRatingsLayout", state.posterRatingsLayout);
-                }
-                if (state.posterRatingsMaxPerSide) {
-                    params.set("posterRatingsMaxPerSide", String(state.posterRatingsMaxPerSide));
-                }
-            }
-
-            if (type === "backdrop" && state.backdropRatingsLayout) {
-                params.set("backdropRatingsLayout", state.backdropRatingsLayout);
-            }
-
-            const baseUrl = state.baseUrl.replace(/\/+$/g, "");
-            return `${baseUrl}/${type}/${encodeURIComponent(state.previewId)}.jpg?${params.toString()}`;
-        }
-
-        function updateErdbPreview() {
-            const state = getErdbFormState();
-            const ready = !!(state.baseUrl && state.tmdbKey && state.mdblistKey);
-            const types = ["poster", "backdrop", "logo"];
-
-            types.forEach(type => {
-                const img = document.getElementById(`erdbPreview${type.charAt(0).toUpperCase()}${type.slice(1)}`);
-                const urlLabel = document.getElementById(`erdbPreview${type.charAt(0).toUpperCase()}${type.slice(1)}Url`);
-                const container = img ? img.closest(".erdb-preview-media") : null;
-                const placeholder = container ? container.querySelector(".erdb-preview-placeholder") : null;
-                const url = ready && state.enabledTypes[type] ? buildErdbPreviewUrl(state, type) : "";
-
-                if (img) {
-                    if (url) {
-                        if (img.dataset.url !== url) {
-                            img.src = url;
-                            img.dataset.url = url;
-                        }
-                        img.style.display = "block";
-                    } else {
-                        img.style.display = "none";
-                        img.dataset.url = "";
-                    }
-                }
-
-                if (placeholder) {
-                    if (!state.enabledTypes[type]) {
-                        placeholder.textContent = "Tipo disattivato.";
-                    } else if (!ready) {
-                        placeholder.textContent = "Inserisci base URL e chiavi per vedere il preview.";
-                    } else {
-                        placeholder.textContent = "Preview non disponibile.";
-                    }
-                    placeholder.style.display = url ? "none" : "block";
-                }
-
-                if (urlLabel) {
-                    urlLabel.textContent = url;
-                }
-            });
-        }
-
-        function openErdbModal() {
-            const modal = document.getElementById("erdb-modal");
-            modal.classList.add("open");
-            modal.setAttribute("aria-hidden", "false");
-            document.body.classList.add("modal-open");
-            updateErdbPreview();
-        }
-
-        function closeErdbModal() {
-            const modal = document.getElementById("erdb-modal");
-            modal.classList.remove("open");
-            modal.setAttribute("aria-hidden", "true");
-            document.body.classList.remove("modal-open");
-        }
-
-        function bindErdbControls() {
-            const setupBtn = document.getElementById("erdb-setup-btn");
-            const closeBtn = document.getElementById("erdb-modal-close");
-            const doneBtn = document.getElementById("erdb-modal-done");
-            const backdrop = document.getElementById("erdb-modal-backdrop");
-
-            setupBtn.addEventListener("click", openErdbModal);
-            closeBtn.addEventListener("click", closeErdbModal);
-            doneBtn.addEventListener("click", closeErdbModal);
-            backdrop.addEventListener("click", closeErdbModal);
-
-            document.addEventListener("keydown", event => {
-                if (event.key === "Escape") {
-                    closeErdbModal();
-                }
-            });
-
-            const watchIds = [
-                "erdbBaseUrl",
-                "erdbTmdbKey",
-                "erdbMdblistKey",
-                "erdbPreviewId",
-                "erdbLang",
-                "erdbRatingStyle",
-                "erdbImageText",
-                "erdbPosterLayout",
-                "erdbBackdropLayout",
-                "erdbPosterMax",
-                "erdbPosterStyleOverride",
-                "erdbBackdropStyleOverride",
-                "erdbLogoStyleOverride",
-                "erdbPosterImageTextOverride",
-                "erdbBackdropImageTextOverride",
-                "erdbEnablePoster",
-                "erdbEnableBackdrop",
-                "erdbEnableLogo"
-            ];
-
-            watchIds.forEach(id => {
-                const element = document.getElementById(id);
-                if (!element) return;
-                const eventName = element.tagName === "SELECT" || element.type === "checkbox" ? "change" : "input";
-                element.addEventListener(eventName, updateErdbPreview);
-            });
-
-            ERDB_RATING_PROVIDERS.forEach(provider => {
-                const input = document.getElementById(`erdb-rating-${provider}`);
-                if (input) input.addEventListener("change", updateErdbPreview);
-            });
-
-            document.getElementById("erdb-ratings-all-btn").addEventListener("click", () => {
-                ERDB_RATING_PROVIDERS.forEach(provider => {
-                    const input = document.getElementById(`erdb-rating-${provider}`);
-                    if (input) input.checked = true;
-                });
-                updateErdbPreview();
-            });
-
-            document.getElementById("erdb-ratings-none-btn").addEventListener("click", () => {
-                ERDB_RATING_PROVIDERS.forEach(provider => {
-                    const input = document.getElementById(`erdb-rating-${provider}`);
-                    if (input) input.checked = false;
-                });
-                updateErdbPreview();
-            });
+        function updateErdbToggleVisibility() {
+            const erdbConfigInput = document.getElementById('erdbConfig');
+            const toggles = document.getElementById('erdbTypeToggles');
+            if (!erdbConfigInput || !toggles) return;
+            const hasValue = !!erdbConfigInput.value.trim();
+            toggles.style.display = hasValue ? '' : 'none';
         }
 
         function getBaseCatalogId(id) {
@@ -3469,7 +2893,7 @@
                 document.getElementById("topStreamingKey").value = resolvedConfig.topStreamingKey;
             }
 
-            applyErdbConfig(resolvedConfig.erdb);
+            applyErdbConfigFields(resolvedConfig);
 
             if (typeof resolvedConfig.catalogs !== "string" || !resolvedConfig.catalogs.trim()) return;
 
@@ -3925,9 +3349,15 @@
             if (topPosterKey) config.topStreamingKey = topPosterKey;
             if (!returnStreams) config.returnStreams = false;
 
-            const erdbState = getErdbFormState();
-            const erdbConfig = buildErdbConfigFromState(erdbState);
-            if (erdbConfig) config.erdb = erdbConfig;
+            const erdbConfigValue = document.getElementById("erdbConfig").value.trim();
+            if (erdbConfigValue) {
+                config.erdbConfig = erdbConfigValue;
+                const erdbTypes = {};
+                if (!document.getElementById("erdbEnablePoster").checked) erdbTypes.poster = false;
+                if (!document.getElementById("erdbEnableBackdrop").checked) erdbTypes.backdrop = false;
+                if (!document.getElementById("erdbEnableLogo").checked) erdbTypes.logo = false;
+                if (Object.keys(erdbTypes).length > 0) config.erdbTypes = erdbTypes;
+            }
 
             config.animeCatalogSource = selectedAnimeSource;
             if (Object.keys(catalogCustomNames).length > 0) {
@@ -4059,7 +3489,11 @@
             setCatalogsLandscapeForSection(getActiveCatalogPage(), false);
         });
 
-        bindErdbControls();
+        const erdbConfigInput = document.getElementById("erdbConfig");
+        if (erdbConfigInput) {
+            erdbConfigInput.addEventListener("input", updateErdbToggleVisibility);
+        }
+
         applyInitialConfiguration(decodeConfigFromPath());
         renderCatalogList("standard");
         renderCatalogList("top10");
@@ -4079,3 +3513,5 @@
     </script>
 </body>
 </html>
+
+
