@@ -1988,7 +1988,8 @@
             { name: "Rai Play", slug: "rai" },
             { name: "Mediaset Infinity", slug: "mediaset" },
             { name: "Timvision", slug: "timvision" },
-            { name: "Rakuten TV", slug: "rakuten" }
+            { name: "Rakuten TV", slug: "rakuten" },
+            { name: "Crunchyroll", slug: "crunchyroll", supportsOriginal: false }
         ];
         const TOP10_PROVIDER_SLUGS = {
             netflix: "netflix",
@@ -2002,7 +2003,8 @@
             mediaset: "mediaset-infinity",
             timvision: "timvision",
             rai: "rai-play",
-            rakuten: "rakuten-tv"
+            rakuten: "rakuten-tv",
+            crunchyroll: "crunchyroll"
         };
         const TOP10_PROVIDER_IDS = PROVIDERS
             .filter(provider => Boolean(TOP10_PROVIDER_SLUGS[provider.slug]))
@@ -2066,6 +2068,9 @@
         const ALL_CATALOGS = [...STANDARD_CATALOGS, ...TOP10_CATALOGS, ...ANIME_CATALOGS];
         const CATALOGS_BY_ID = Object.fromEntries(ALL_CATALOGS.map(catalog => [catalog.id, catalog]));
         const PROVIDERS_BY_SLUG = Object.fromEntries(PROVIDERS.map(provider => [provider.slug, provider]));
+        function providerSupportsOriginal(provider) {
+            return !!(provider && provider.supportsOriginal !== false);
+        }
         const DEFAULT_SORT_ORDERS = {
             standard: [
                 "upcoming_movie", "upcoming_series", "now_playing_movie",
@@ -2114,14 +2119,15 @@
         });
 
         PROVIDERS.forEach(provider => {
-            catalogVisibility[`${provider.slug}_original`] = true;
-            catalogVisibility[`${provider.slug}_catalog`] = false;
+            const supportsOriginal = providerSupportsOriginal(provider);
+            catalogVisibility[`${provider.slug}_original`] = supportsOriginal;
+            catalogVisibility[`${provider.slug}_catalog`] = !supportsOriginal;
             catalogVisibility[`${provider.slug}_top10`] = false;
             catalogHomeVisibility[getProviderHomeKey("standard", provider.slug)] = true;
             catalogHomeVisibility[getProviderHomeKey("top10", provider.slug)] = true;
             standardProviderVisibilityMemory[provider.slug] = {
-                original: true,
-                catalog: false
+                original: supportsOriginal,
+                catalog: !supportsOriginal
             };
         });
 
@@ -2507,6 +2513,9 @@
 
             if (section === "standard") {
                 if (provider) {
+                    if (!providerSupportsOriginal(provider)) {
+                        return !!catalogVisibility[`${id}_catalog`];
+                    }
                     return !!catalogVisibility[`${id}_original`] || !!catalogVisibility[`${id}_catalog`];
                 }
                 return catalogVisibility[id] !== false;
@@ -2556,8 +2565,12 @@
         }
 
         function getProviderModeLabel(slug) {
+            const provider = PROVIDERS_BY_SLUG[slug];
             const isOriginal = !!catalogVisibility[`${slug}_original`];
             const isCatalog = !!catalogVisibility[`${slug}_catalog`];
+            if (provider && !providerSupportsOriginal(provider)) {
+                return isCatalog ? "Completo" : "";
+            }
             if (isOriginal && isCatalog) return "Original + Completo";
             if (isOriginal) return "Original";
             if (isCatalog) return "Completo";
@@ -2702,11 +2715,12 @@
 
             if (section === "standard") {
                 if (provider) {
-                    if (catalogVisibility[`${id}_original`]) {
+                    const supportsOriginal = providerSupportsOriginal(provider);
+                    if (supportsOriginal && catalogVisibility[`${id}_original`]) {
                         catalogs.push(id + "_original");
                         if (!isHome) catalogs[catalogs.length - 1] += "_d";
                     }
-                    if (catalogVisibility[`${id}_catalog`]) {
+                    if (catalogVisibility[`${id}_catalog`] || (!supportsOriginal && catalogVisibility[`${id}_original`])) {
                         catalogs.push(id + "_catalog");
                         if (!isHome) catalogs[catalogs.length - 1] += "_d";
                     }
@@ -2753,10 +2767,11 @@
 
             if (section === "standard") {
                 if (provider) {
-                    if (catalogVisibility[`${id}_original`]) {
+                    const supportsOriginal = providerSupportsOriginal(provider);
+                    if (supportsOriginal && catalogVisibility[`${id}_original`]) {
                         markShape(id + "_original");
                     }
-                    if (catalogVisibility[`${id}_catalog`]) {
+                    if (catalogVisibility[`${id}_catalog`] || (!supportsOriginal && catalogVisibility[`${id}_original`])) {
                         markShape(id + "_catalog");
                     }
                     return;
@@ -2835,11 +2850,16 @@
 
             PROVIDERS.forEach(provider => {
                 const slug = provider.slug;
+                const supportsOriginal = providerSupportsOriginal(provider);
                 if (nextState) {
                     const rememberedState = standardProviderVisibilityMemory[slug];
                     const hasRememberedState = rememberedState && (rememberedState.original || rememberedState.catalog);
-                    catalogVisibility[`${slug}_original`] = hasRememberedState ? rememberedState.original : true;
-                    catalogVisibility[`${slug}_catalog`] = hasRememberedState ? rememberedState.catalog : false;
+                    catalogVisibility[`${slug}_original`] = supportsOriginal && (hasRememberedState ? rememberedState.original : true);
+                    catalogVisibility[`${slug}_catalog`] = hasRememberedState ? rememberedState.catalog : !supportsOriginal;
+                    if (!supportsOriginal) {
+                        catalogVisibility[`${slug}_original`] = false;
+                        catalogVisibility[`${slug}_catalog`] = hasRememberedState ? rememberedState.catalog : true;
+                    }
                     rememberStandardProviderVisibility(slug);
                     return;
                 }
@@ -2886,8 +2906,9 @@
             if (activeProviders.length === 0) return;
 
             activeProviders.forEach(provider => {
-                const useOriginal = mode === "original" || mode === "both";
-                const useCatalog = mode === "complete" || mode === "both";
+                const supportsOriginal = providerSupportsOriginal(provider);
+                const useOriginal = supportsOriginal && (mode === "original" || mode === "both");
+                const useCatalog = (mode === "complete" || mode === "both") || !supportsOriginal;
                 catalogVisibility[`${provider.slug}_original`] = useOriginal;
                 catalogVisibility[`${provider.slug}_catalog`] = useCatalog;
                 rememberStandardProviderVisibility(provider.slug);
@@ -2946,12 +2967,16 @@
                 const catalogDefinition = getCatalogDefinition(catalogId);
 
                 if (provider) {
-                    if (catalogId === `${baseId}_original` || catalogId === `${baseId}_catalog` || catalogId === `${baseId}_top10`) {
-                        if (catalogId === `${baseId}_top10` && !TOP10_PROVIDER_IDS.includes(baseId)) {
+                    let normalizedProviderCatalogId = catalogId;
+                    if (!providerSupportsOriginal(provider) && catalogId === `${baseId}_original`) {
+                        normalizedProviderCatalogId = `${baseId}_catalog`;
+                    }
+                    if (normalizedProviderCatalogId === `${baseId}_original` || normalizedProviderCatalogId === `${baseId}_catalog` || normalizedProviderCatalogId === `${baseId}_top10`) {
+                        if (normalizedProviderCatalogId === `${baseId}_top10` && !TOP10_PROVIDER_IDS.includes(baseId)) {
                             return;
                         }
-                        const providerSection = catalogId === `${baseId}_top10` ? "top10" : "standard";
-                        catalogVisibility[catalogId] = true;
+                        const providerSection = normalizedProviderCatalogId === `${baseId}_top10` ? "top10" : "standard";
+                        catalogVisibility[normalizedProviderCatalogId] = true;
                         const homeKey = getProviderHomeKey(providerSection, baseId);
                         catalogHomeVisibility[homeKey] = catalogHomeVisibility[homeKey] || isHome;
                         if (!configuredOrder[providerSection].includes(baseId)) {
@@ -3010,7 +3035,8 @@
             const homeKey = getProviderHomeKey(section, id);
             const isHome = catalogHomeVisibility[homeKey] !== false;
             const isTop10Section = section === "top10";
-            const isAnyActive = isTop10Section ? isTop10 : (isOriginal || isCatalog);
+            const supportsOriginal = providerSupportsOriginal(provider);
+            const isAnyActive = isTop10Section ? isTop10 : (supportsOriginal ? (isOriginal || isCatalog) : isCatalog);
             const customName = getCatalogCustomName(id);
             const displayName = customName || provider.name;
             const landscapeKey = makeSelectedCatalogKey(section, id);
@@ -3041,7 +3067,7 @@
                     </div>
                 </div>
                 <div class="catalog-controls">
-                    ${!isTop10Section ? `
+                    ${!isTop10Section && supportsOriginal ? `
                     <div class="toggle-group">
                         <span class="toggle-label">Original</span>
                         <label class="switch">

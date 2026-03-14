@@ -828,7 +828,8 @@ const TOP10_PROVIDER_PAGE_SLUGS = {
     mediaset: "mediaset-infinity",
     timvision: "timvision",
     rai: "rai-play",
-    rakuten: "rakuten-tv"
+    rakuten: "rakuten-tv",
+    crunchyroll: "crunchyroll"
 };
 
 function buildTop10ManifestId(type, slug = null) {
@@ -1023,10 +1024,11 @@ function isHomeCatalogRequest(extra = {}) {
 
 function filterCatalogItems(results, catalogId, allowFuture = false) {
     const today = new Date().toISOString().split("T")[0];
+    const allowAnimeCatalog = String(catalogId || "").includes("anime") || String(catalogId || "").includes("crunchyroll");
     return (Array.isArray(results) ? results : []).filter(item => {
         const date = getPrimaryReleaseDate(item);
 
-        if (!catalogId.includes("anime")) {
+        if (!allowAnimeCatalog) {
             if (item.genre_ids && item.genre_ids.includes(16) && item.original_language === "ja") {
                 return false;
             }
@@ -3827,7 +3829,8 @@ const PROVIDERS = {
     "Rai Play": 222,
     "Mediaset Infinity": "359|110",
     "Timvision": 109,
-    "Rakuten TV": 35
+    "Rakuten TV": 35,
+    "Crunchyroll": 283
 };
 
 const COMPANY_IDS = {
@@ -3859,7 +3862,8 @@ const SLUG_TO_PROVIDER = {
     "disney": "Disney+", "apple": "Apple TV+", "hbo": "HBO Max",
     "paramount": "Paramount+", "now": "Sky Go / NOW", "sky": "Sky Go / NOW",
     "rai": "Rai Play", "mediaset": "Mediaset Infinity",
-    "timvision": "Timvision", "rakuten": "Rakuten TV"
+    "timvision": "Timvision", "rakuten": "Rakuten TV",
+    "crunchyroll": "Crunchyroll"
 };
 
 const PROVIDER_SLUGS = {};
@@ -4029,28 +4033,31 @@ const fullCatalogs = [
 // Add Provider Catalogs dynamically to fullCatalogs
 Object.keys(PROVIDERS).forEach(providerName => {
     const slug = PROVIDER_SLUGS[providerName] || providerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const allowOriginals = providerName !== "Crunchyroll";
     
     // 1. "Originals" Catalog (Production Company/Network)
-    fullCatalogs.push({
-        type: "movie",
-        id: `tmdb.movie.${slug}`,
-        name: `${providerName} Original`,
-        extra: [{ 
-            name: "genre", 
-            isRequired: false,
-            options: Object.keys(MOVIE_GENRES) 
-        }, { name: "skip", isRequired: false }]
-    });
-    fullCatalogs.push({
-        type: "series",
-        id: `tmdb.series.${slug}`,
-        name: `${providerName} Original`,
-        extra: [{ 
-            name: "genre", 
-            isRequired: false,
-            options: Object.keys(TV_GENRES) 
-        }, { name: "skip", isRequired: false }]
-    });
+    if (allowOriginals) {
+        fullCatalogs.push({
+            type: "movie",
+            id: `tmdb.movie.${slug}`,
+            name: `${providerName} Original`,
+            extra: [{ 
+                name: "genre", 
+                isRequired: false,
+                options: Object.keys(MOVIE_GENRES) 
+            }, { name: "skip", isRequired: false }]
+        });
+        fullCatalogs.push({
+            type: "series",
+            id: `tmdb.series.${slug}`,
+            name: `${providerName} Original`,
+            extra: [{ 
+                name: "genre", 
+                isRequired: false,
+                options: Object.keys(TV_GENRES) 
+            }, { name: "skip", isRequired: false }]
+        });
+    }
 
     // 2. "Catalog" Catalog (Watch Availability)
     fullCatalogs.push({
