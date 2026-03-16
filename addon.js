@@ -1628,6 +1628,98 @@ function getTop10ScoringEntry(state, contentEntry) {
     return scoringKey ? resolveTop10StateEntry(state, contentEntry[scoringKey]) : null;
 }
 
+function normalizeTop10TmdbId(value) {
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return null;
+    if (/^tmdb:\d+$/i.test(rawValue)) {
+        const [, idPart] = rawValue.split(":");
+        return idPart || null;
+    }
+    return /^\d+$/.test(rawValue) ? rawValue : null;
+}
+
+function extractTop10ExternalIds(state, contentEntry) {
+    if (!contentEntry || typeof contentEntry !== "object") return { imdbId: null, tmdbId: null };
+
+    let imdbId = normalizeImdbId(contentEntry.imdbId || contentEntry.imdb_id || contentEntry.imdb);
+    let tmdbId = normalizeTop10TmdbId(contentEntry.tmdbId || contentEntry.tmdb_id || contentEntry.tmdb);
+    if (imdbId && tmdbId) return { imdbId, tmdbId };
+
+    const externalKey = Object.keys(contentEntry).find(key => key.startsWith("externalIds"));
+    const rawExternal = externalKey ? contentEntry[externalKey] : contentEntry.externalIds;
+    const externalValue = resolveTop10StateEntry(state, rawExternal);
+
+    const collectExternalId = (value) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+            value.forEach(entry => collectExternalId(resolveTop10StateEntry(state, entry)));
+            return;
+        }
+        if (typeof value !== "object") {
+            const stringValue = String(value || "").trim();
+            if (!imdbId && stringValue.toLowerCase().startsWith("tt")) {
+                imdbId = normalizeImdbId(stringValue);
+            }
+            return;
+        }
+
+        if (!imdbId) {
+            imdbId = normalizeImdbId(value.imdbId || value.imdb_id || value.imdb);
+        }
+        if (!tmdbId) {
+            tmdbId = normalizeTop10TmdbId(value.tmdbId || value.tmdb_id || value.tmdb);
+        }
+
+        const provider = String(value.provider || value.source || value.externalSource || value.type || value.name || "")
+            .trim()
+            .toLowerCase();
+        const externalIdValue = value.externalId || value.external_id || value.value || value.id;
+        const externalId = externalIdValue !== undefined && externalIdValue !== null
+            ? String(externalIdValue).trim()
+            : "";
+
+        if (!imdbId && externalId && (provider.includes("imdb") || externalId.toLowerCase().startsWith("tt"))) {
+            imdbId = normalizeImdbId(externalId);
+        }
+        if (!tmdbId && externalId && provider.includes("tmdb")) {
+            tmdbId = normalizeTop10TmdbId(externalId);
+        }
+    };
+
+    collectExternalId(externalValue);
+
+    return { imdbId, tmdbId };
+}
+
+function findTop10ContentEntry(state, jwId) {
+    if (!state || typeof state !== "object") return null;
+
+    const normalizedId = String(jwId || "").trim();
+    if (!normalizedId) return null;
+
+    const showPattern = new RegExp(`^\\$Show:${normalizedId}\\.content\\([^)]*\\)$`);
+    const moviePattern = new RegExp(`^\\$Movie:${normalizedId}\\.content\\([^)]*\\)$`);
+    const contentKeys = Object.keys(state).filter(key => showPattern.test(key) || moviePattern.test(key));
+    if (contentKeys.length === 0) return null;
+
+    const preferredKey = contentKeys.find(key => {
+        const entry = state[key];
+        return entry && Object.prototype.hasOwnProperty.call(entry, "externalIds");
+    })
+        || contentKeys.find(key =>
+            key.includes(`\"country\":\"${TOP10_SOURCE_COUNTRY}\"`) && key.includes("\"language\":\"it\"")
+        )
+        || contentKeys[0];
+
+    return preferredKey ? state[preferredKey] : null;
+}
+
+function extractTop10ExternalIdsFromState(state, jwId) {
+    const contentEntry = findTop10ContentEntry(state, jwId);
+    if (!contentEntry) return { imdbId: null, tmdbId: null };
+    return extractTop10ExternalIds(state, contentEntry);
+}
+
 function getTop10PrimaryBackdropUrl(state, contentEntry) {
     if (!contentEntry || typeof contentEntry !== "object") return null;
 
@@ -1692,6 +1784,7 @@ function extractTop10EntriesFromPopularTitles(state, options = {}) {
 
         const scoringEntry = getTop10ScoringEntry(state, contentEntry);
         const chartInfoEntry = getTop10ChartInfoFromNode(state, nodeEntry);
+        const externalIds = extractTop10ExternalIds(state, contentEntry);
 
         entries.push({
             jwId: typeof nodeEntry.id === "string" ? nodeEntry.id : null,
@@ -1707,6 +1800,8 @@ function extractTop10EntriesFromPopularTitles(state, options = {}) {
             imdbRating: scoringEntry && Number.isFinite(Number(scoringEntry.imdbScore))
                 ? Number(scoringEntry.imdbScore)
                 : null,
+            imdbId: externalIds.imdbId,
+            tmdbId: externalIds.tmdbId,
             rank: entries.length + 1,
             trend: chartInfoEntry && chartInfoEntry.trend ? String(chartInfoEntry.trend) : null,
             trendDifference: Number.parseInt(String(chartInfoEntry && chartInfoEntry.trendDifference || ""), 10) || 0,
@@ -1764,6 +1859,7 @@ function extractTop10ChartEntries(state, options = {}) {
 
             const scoringEntry = getTop10ScoringEntry(state, contentEntry);
             const chartInfoEntry = resolveTop10StateEntry(state, edgeEntry && edgeEntry.streamingChartInfo);
+            const externalIds = extractTop10ExternalIds(state, contentEntry);
 
             return {
                 jwId: typeof nodeEntry.id === "string" ? nodeEntry.id : null,
@@ -1779,6 +1875,8 @@ function extractTop10ChartEntries(state, options = {}) {
                 imdbRating: scoringEntry && Number.isFinite(Number(scoringEntry.imdbScore))
                     ? Number(scoringEntry.imdbScore)
                     : null,
+                imdbId: externalIds.imdbId,
+                tmdbId: externalIds.tmdbId,
                 rank: Number.parseInt(String(chartInfoEntry && chartInfoEntry.rank || ""), 10) || (index + 1),
                 trend: chartInfoEntry && chartInfoEntry.trend ? String(chartInfoEntry.trend) : null,
                 trendDifference: Number.parseInt(String(chartInfoEntry && chartInfoEntry.trendDifference || ""), 10) || 0,
@@ -1794,6 +1892,23 @@ function extractTop10ChartEntries(state, options = {}) {
     return extractTop10EntriesFromPopularTitles(state, { objectType });
 }
 
+function hasGraphqlErrors(payload) {
+    return payload && Array.isArray(payload.errors) && payload.errors.length > 0;
+}
+
+function getTop10GraphqlContentSelection(includeExternalIds = false) {
+    const fields = [
+        "title",
+        "fullPath",
+        "originalReleaseYear",
+        "posterUrl(format: JPG, profile: S166)"
+    ];
+    if (includeExternalIds) {
+        fields.push("externalIds { provider externalId }");
+    }
+    return fields.join("\n");
+}
+
 async function fetchTop10ChartEntriesFromGraphql(options = {}) {
     const objectType = String(options.objectType || "").trim().toUpperCase();
     if (!objectType) return [];
@@ -1803,89 +1918,99 @@ async function fetchTop10ChartEntriesFromGraphql(options = {}) {
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
 
-    const query = `
-        query GetStreamingCharts($country: Country!, $language: Language!, $filter: StreamingChartsFilter!, $first: Int!, $after: String!) {
-            streamingCharts(country: $country, filter: $filter, first: $first, after: $after) {
-                edges {
-                    streamingChartInfo {
-                        rank
-                        trend
-                        trendDifference
-                        topRank
-                    }
-                    node {
-                        id
-                        content(country: $country, language: $language) {
-                            title
-                            fullPath
-                            originalReleaseYear
-                            posterUrl(format: JPG, profile: S166)
+    const fetchEntries = async (includeExternalIds) => {
+        const contentSelection = getTop10GraphqlContentSelection(includeExternalIds);
+        const query = `
+            query GetStreamingCharts($country: Country!, $language: Language!, $filter: StreamingChartsFilter!, $first: Int!, $after: String!) {
+                streamingCharts(country: $country, filter: $filter, first: $first, after: $after) {
+                    edges {
+                        streamingChartInfo {
+                            rank
+                            trend
+                            trendDifference
+                            topRank
+                        }
+                        node {
+                            id
+                            content(country: $country, language: $language) {
+                                ${contentSelection}
+                            }
                         }
                     }
                 }
             }
-        }
-    `;
+        `;
 
-    try {
-        const response = await fetch(TOP10_SOURCE_GRAPHQL_URL, {
-            method: "POST",
-            headers: {
-                Accept: "application/json",
-                "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-            },
-            body: JSON.stringify({
-                query,
-                variables: {
-                    country: TOP10_SOURCE_COUNTRY,
-                    language: "it",
-                    first: 10,
-                    after: "",
-                    filter: {
-                        category: "WEEKLY_POPULARITY_SAME_CONTENT_TYPE",
-                        objectType
+        try {
+            const response = await fetch(TOP10_SOURCE_GRAPHQL_URL, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: {
+                        country: TOP10_SOURCE_COUNTRY,
+                        language: "it",
+                        first: 10,
+                        after: "",
+                        filter: {
+                            category: "WEEKLY_POPULARITY_SAME_CONTENT_TYPE",
+                            objectType
+                        }
                     }
-                }
-            })
-        });
-        const payload = await response.json();
-        const edges = Array.isArray(payload && payload.data && payload.data.streamingCharts && payload.data.streamingCharts.edges)
-            ? payload.data.streamingCharts.edges
-            : [];
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok || hasGraphqlErrors(payload)) return [];
 
-        const entries = edges
-            .map((edge, index) => {
-                const node = edge && edge.node && typeof edge.node === "object" ? edge.node : null;
-                const content = node && node.content && typeof node.content === "object" ? node.content : null;
-                const chartInfo = edge && edge.streamingChartInfo && typeof edge.streamingChartInfo === "object"
-                    ? edge.streamingChartInfo
-                    : null;
-                if (!node || !content || !content.title) return null;
+            const edges = Array.isArray(payload && payload.data && payload.data.streamingCharts && payload.data.streamingCharts.edges)
+                ? payload.data.streamingCharts.edges
+                : [];
 
-                return {
-                    jwId: typeof node.id === "string" ? node.id : null,
-                    title: String(content.title).trim(),
-                    fullPath: typeof content.fullPath === "string" ? content.fullPath : null,
-                    year: getYearFromValue(content.originalReleaseYear),
-                    poster: buildTop10ImageUrl(content.posterUrl),
-                    background: null,
-                    imdbRating: null,
-                    rank: Number.parseInt(String(chartInfo && chartInfo.rank || ""), 10) || (index + 1),
-                    trend: chartInfo && chartInfo.trend ? String(chartInfo.trend) : null,
-                    trendDifference: Number.parseInt(String(chartInfo && chartInfo.trendDifference || ""), 10) || 0,
-                    topRank: Number.parseInt(String(chartInfo && chartInfo.topRank || ""), 10) || null
-                };
-            })
-            .filter(Boolean);
+            return edges
+                .map((edge, index) => {
+                    const node = edge && edge.node && typeof edge.node === "object" ? edge.node : null;
+                    const content = node && node.content && typeof node.content === "object" ? node.content : null;
+                    const chartInfo = edge && edge.streamingChartInfo && typeof edge.streamingChartInfo === "object"
+                        ? edge.streamingChartInfo
+                        : null;
+                    if (!node || !content || !content.title) return null;
+                    const externalIds = extractTop10ExternalIds(null, content);
 
-        if (response.ok && entries.length > 0) {
-            await cache.set(cacheKey, entries, withTtlJitter(CACHE_TTL_SECONDS.top10));
-            return entries;
+                    return {
+                        jwId: typeof node.id === "string" ? node.id : null,
+                        title: String(content.title).trim(),
+                        fullPath: typeof content.fullPath === "string" ? content.fullPath : null,
+                        year: getYearFromValue(content.originalReleaseYear),
+                        poster: buildTop10ImageUrl(content.posterUrl),
+                        background: null,
+                        imdbRating: null,
+                        imdbId: externalIds.imdbId,
+                        tmdbId: externalIds.tmdbId,
+                        rank: Number.parseInt(String(chartInfo && chartInfo.rank || ""), 10) || (index + 1),
+                        trend: chartInfo && chartInfo.trend ? String(chartInfo.trend) : null,
+                        trendDifference: Number.parseInt(String(chartInfo && chartInfo.trendDifference || ""), 10) || 0,
+                        topRank: Number.parseInt(String(chartInfo && chartInfo.topRank || ""), 10) || null
+                    };
+                })
+                .filter(Boolean);
+        } catch (error) {
+            return [];
         }
-    } catch (error) {
-        // Fall through to negative cache below.
+    };
+
+    let entries = await fetchEntries(true);
+    if (entries.length === 0) {
+        entries = await fetchEntries(false);
+    }
+
+    if (entries.length > 0) {
+        await cache.set(cacheKey, entries, withTtlJitter(CACHE_TTL_SECONDS.top10));
+        return entries;
     }
 
     await cache.set(cacheKey, createNegativeCache("top10_graphql_chart_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
@@ -1902,85 +2027,95 @@ async function fetchTop10PopularEntriesFromGraphql(options = {}) {
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
 
-    const query = `
-        query GetPopularTitles($country: Country!, $language: Language!, $filter: TitleFilter!, $first: Int!, $after: String!, $sortBy: PopularTitlesSorting!, $sortRandomSeed: Int!, $offset: Int!) {
-            popularTitles(country: $country, filter: $filter, first: $first, after: $after, sortBy: $sortBy, sortRandomSeed: $sortRandomSeed, offset: $offset) {
-                edges {
-                    node {
-                        id
-                        objectType
-                        content(country: $country, language: $language) {
-                            title
-                            fullPath
-                            originalReleaseYear
-                            posterUrl(format: JPG, profile: S166)
+    const fetchEntries = async (includeExternalIds) => {
+        const contentSelection = getTop10GraphqlContentSelection(includeExternalIds);
+        const query = `
+            query GetPopularTitles($country: Country!, $language: Language!, $filter: TitleFilter!, $first: Int!, $after: String!, $sortBy: PopularTitlesSorting!, $sortRandomSeed: Int!, $offset: Int!) {
+                popularTitles(country: $country, filter: $filter, first: $first, after: $after, sortBy: $sortBy, sortRandomSeed: $sortRandomSeed, offset: $offset) {
+                    edges {
+                        node {
+                            id
+                            objectType
+                            content(country: $country, language: $language) {
+                                ${contentSelection}
+                            }
                         }
                     }
                 }
             }
-        }
-    `;
+        `;
 
-    try {
-        const response = await fetch(TOP10_SOURCE_GRAPHQL_URL, {
-            method: "POST",
-            headers: {
-                Accept: "application/json",
-                "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-            },
-            body: JSON.stringify({
-                query,
-                variables: {
-                    country: TOP10_SOURCE_COUNTRY,
-                    language: "it",
-                    first: 10,
-                    after: "",
-                    sortBy: "TRENDING",
-                    sortRandomSeed: 0,
-                    offset: 0,
-                    filter: {
-                        objectTypes: [objectType],
-                        packages
+        try {
+            const response = await fetch(TOP10_SOURCE_GRAPHQL_URL, {
+                method: "POST",
+                headers: {
+                    Accept: "application/json",
+                    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+                },
+                body: JSON.stringify({
+                    query,
+                    variables: {
+                        country: TOP10_SOURCE_COUNTRY,
+                        language: "it",
+                        first: 10,
+                        after: "",
+                        sortBy: "TRENDING",
+                        sortRandomSeed: 0,
+                        offset: 0,
+                        filter: {
+                            objectTypes: [objectType],
+                            packages
+                        }
                     }
-                }
-            })
-        });
-        const payload = await response.json();
-        const edges = Array.isArray(payload && payload.data && payload.data.popularTitles && payload.data.popularTitles.edges)
-            ? payload.data.popularTitles.edges
-            : [];
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok || hasGraphqlErrors(payload)) return [];
 
-        const entries = edges
-            .map((edge, index) => {
-                const node = edge && edge.node && typeof edge.node === "object" ? edge.node : null;
-                if (!node || (node.objectType && node.objectType !== objectType)) return null;
-                const content = node.content && typeof node.content === "object" ? node.content : null;
-                if (!content || !content.title) return null;
+            const edges = Array.isArray(payload && payload.data && payload.data.popularTitles && payload.data.popularTitles.edges)
+                ? payload.data.popularTitles.edges
+                : [];
 
-                return {
-                    jwId: typeof node.id === "string" ? node.id : null,
-                    title: String(content.title).trim(),
-                    fullPath: typeof content.fullPath === "string" ? content.fullPath : null,
-                    year: getYearFromValue(content.originalReleaseYear),
-                    poster: buildTop10ImageUrl(content.posterUrl),
-                    background: null,
-                    imdbRating: null,
-                    rank: index + 1,
-                    trend: null,
-                    trendDifference: 0,
-                    topRank: null
-                };
-            })
-            .filter(Boolean);
+            return edges
+                .map((edge, index) => {
+                    const node = edge && edge.node && typeof edge.node === "object" ? edge.node : null;
+                    if (!node || (node.objectType && node.objectType !== objectType)) return null;
+                    const content = node.content && typeof node.content === "object" ? node.content : null;
+                    if (!content || !content.title) return null;
+                    const externalIds = extractTop10ExternalIds(null, content);
 
-        if (response.ok && entries.length > 0) {
-            await cache.set(cacheKey, entries, withTtlJitter(CACHE_TTL_SECONDS.top10));
-            return entries;
+                    return {
+                        jwId: typeof node.id === "string" ? node.id : null,
+                        title: String(content.title).trim(),
+                        fullPath: typeof content.fullPath === "string" ? content.fullPath : null,
+                        year: getYearFromValue(content.originalReleaseYear),
+                        poster: buildTop10ImageUrl(content.posterUrl),
+                        background: null,
+                        imdbRating: null,
+                        imdbId: externalIds.imdbId,
+                        tmdbId: externalIds.tmdbId,
+                        rank: index + 1,
+                        trend: null,
+                        trendDifference: 0,
+                        topRank: null
+                    };
+                })
+                .filter(Boolean);
+        } catch (error) {
+            return [];
         }
-    } catch (error) {
-        // Fall through to negative cache below.
+    };
+
+    let entries = await fetchEntries(true);
+    if (entries.length === 0) {
+        entries = await fetchEntries(false);
+    }
+
+    if (entries.length > 0) {
+        await cache.set(cacheKey, entries, withTtlJitter(CACHE_TTL_SECONDS.top10));
+        return entries;
     }
 
     await cache.set(cacheKey, createNegativeCache("top10_graphql_popular_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
@@ -2063,6 +2198,69 @@ async function fetchTop10ProviderPackagesFromPage(pageUrl) {
     return [];
 }
 
+function buildTop10PageUrl(pathOrUrl) {
+    const rawValue = String(pathOrUrl || "").trim();
+    if (!rawValue) return null;
+    if (/^https?:\/\//i.test(rawValue)) return rawValue;
+    return `${TOP10_SOURCE_BASE_URL}${rawValue.startsWith("/") ? rawValue : `/${rawValue}`}`;
+}
+
+async function fetchTop10ExternalIdsFromPage(fullPath, jwId) {
+    const pageUrl = buildTop10PageUrl(fullPath);
+    if (!pageUrl) return { imdbId: null, tmdbId: null };
+
+    const cacheKey = `top10:externalids:v1:${jwId || fullPath}`;
+    const cached = await cache.get(cacheKey);
+    if (isNegativeCache(cached)) return { imdbId: null, tmdbId: null };
+    if (cached && typeof cached === "object") {
+        return {
+            imdbId: normalizeImdbId(cached.imdbId),
+            tmdbId: normalizeTop10TmdbId(cached.tmdbId)
+        };
+    }
+
+    try {
+        const response = await fetch(pageUrl, {
+            headers: {
+                Accept: "text/html,application/xhtml+xml",
+                "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+            }
+        });
+        const html = await response.text();
+        const state = extractTop10ApolloState(html);
+        const externalIds = extractTop10ExternalIdsFromState(state, jwId);
+
+        if (response.ok && (externalIds.imdbId || externalIds.tmdbId)) {
+            await cache.set(cacheKey, externalIds, withTtlJitter(CACHE_TTL_SECONDS.top10));
+            return externalIds;
+        }
+    } catch (error) {
+        // Fall through to negative cache below.
+    }
+
+    await cache.set(cacheKey, createNegativeCache("top10_external_ids_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
+    return { imdbId: null, tmdbId: null };
+}
+
+async function enrichTop10EntriesWithExternalIds(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) return entries;
+
+    return mapWithConcurrency(entries, 3, async (entry) => {
+        if (!entry || (entry.imdbId || entry.tmdbId)) return entry;
+        if (!entry.fullPath || !entry.jwId) return entry;
+
+        const externalIds = await fetchTop10ExternalIdsFromPage(entry.fullPath, entry.jwId);
+        if (!externalIds.imdbId && !externalIds.tmdbId) return entry;
+
+        return {
+            ...entry,
+            imdbId: externalIds.imdbId || entry.imdbId,
+            tmdbId: externalIds.tmdbId || entry.tmdbId
+        };
+    });
+}
+
 function getTmdbSearchCandidatesFromResult(result) {
     return uniqueNonEmptyStrings([
         result && result.title,
@@ -2139,7 +2337,7 @@ async function searchTmdbByTitleCandidate(typePath, query, expectedYear = null, 
             }
         }
 
-        return bestScore >= 60 ? bestMatch : null;
+        return bestScore >= 60 ? { match: bestMatch, score: bestScore } : null;
     } catch (error) {
         return null;
     }
@@ -2152,26 +2350,56 @@ async function resolveTmdbIdFromTop10Entry(entry, requestedType, config = null) 
         entry && entry.title,
         slugTitle
     ]);
-    if (titleCandidates.length === 0) return null;
 
-    const cacheKey = `top10:tmdb-lookup:v1:${requestedType}:${normalizeMatchTitle(titleCandidates[0])}:${expectedYear || ""}:${normalizeMatchTitle(slugTitle)}`;
+    const cacheKey = titleCandidates.length > 0
+        ? `top10:tmdb-lookup:v1:${requestedType}:${normalizeMatchTitle(titleCandidates[0])}:${expectedYear || ""}:${normalizeMatchTitle(slugTitle)}`
+        : null;
+
+    const directTmdbId = normalizeTop10TmdbId(entry && entry.tmdbId);
+    if (directTmdbId) {
+        if (cacheKey) {
+            await cache.set(cacheKey, { tmdbId: directTmdbId }, withTtlJitter(CACHE_TTL_SECONDS.top10));
+        }
+        return directTmdbId;
+    }
+
+    const directImdbId = normalizeImdbId(entry && entry.imdbId);
+    if (directImdbId) {
+        const resolvedTmdbId = await resolveTmdbIdFromImdb(directImdbId, requestedType, config);
+        if (resolvedTmdbId) {
+            if (cacheKey) {
+                await cache.set(cacheKey, { tmdbId: resolvedTmdbId }, withTtlJitter(CACHE_TTL_SECONDS.top10));
+            }
+            return resolvedTmdbId;
+        }
+    }
+
+    if (!cacheKey) return null;
+
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return null;
     if (cached && cached.tmdbId) return cached.tmdbId;
 
     const typePath = requestedType === "series" ? "tv" : "movie";
+    let bestCandidate = null;
 
     for (const candidate of titleCandidates) {
-        let bestMatch = await searchTmdbByTitleCandidate(typePath, candidate, expectedYear, config);
-        if (!bestMatch && Number.isFinite(expectedYear)) {
-            bestMatch = await searchTmdbByTitleCandidate(typePath, candidate, null, config);
+        let matchResult = await searchTmdbByTitleCandidate(typePath, candidate, expectedYear, config);
+        if (!matchResult && Number.isFinite(expectedYear)) {
+            matchResult = await searchTmdbByTitleCandidate(typePath, candidate, null, config);
         }
 
-        const tmdbId = bestMatch && bestMatch.id ? String(bestMatch.id) : null;
-        if (tmdbId) {
-            await cache.set(cacheKey, { tmdbId }, withTtlJitter(CACHE_TTL_SECONDS.top10));
-            return tmdbId;
+        if (matchResult && (!bestCandidate || matchResult.score > bestCandidate.score)) {
+            bestCandidate = matchResult;
         }
+    }
+
+    const tmdbId = bestCandidate && bestCandidate.match && bestCandidate.match.id
+        ? String(bestCandidate.match.id)
+        : null;
+    if (tmdbId) {
+        await cache.set(cacheKey, { tmdbId }, withTtlJitter(CACHE_TTL_SECONDS.top10));
+        return tmdbId;
     }
 
     await cache.set(cacheKey, createNegativeCache("top10_tmdb_lookup_failed"), NEGATIVE_CACHE_TTL_SECONDS);
@@ -2249,9 +2477,10 @@ async function fetchTop10CatalogMetas(catalogId, requestedType, extra = {}, conf
         requiresPackages = true;
     }
 
-    let entries = providerMatch
-        ? await fetchTop10ChartEntriesFromPage(pageUrl, { objectType, requiresPackages })
-        : await fetchTop10ChartEntriesFromGraphql({ objectType });
+    let entries = await fetchTop10ChartEntriesFromPage(pageUrl, { objectType, requiresPackages });
+    if (!providerMatch && entries.length === 0) {
+        entries = await fetchTop10ChartEntriesFromGraphql({ objectType });
+    }
 
     if (providerMatch && entries.length < 10) {
         const providerPackages = await fetchTop10ProviderPackagesFromPage(pageUrl);
@@ -2264,6 +2493,9 @@ async function fetchTop10CatalogMetas(catalogId, requestedType, extra = {}, conf
                 entries = popularEntries;
             }
         }
+    }
+    if (entries.length > 0) {
+        entries = await enrichTop10EntriesWithExternalIds(entries);
     }
     if (entries.length === 0) {
         await cache.set(cacheKey, createNegativeCache("top10_catalog_empty"), NEGATIVE_CACHE_TTL_SECONDS);
