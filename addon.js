@@ -291,6 +291,8 @@ const ERDB_RATING_STYLES = new Set(["glass", "square", "plain"]);
 const ERDB_IMAGE_TEXTS = new Set(["original", "clean", "alternative"]);
 const ERDB_POSTER_LAYOUTS = new Set(["top", "bottom", "left", "right", "top-bottom", "left-right"]);
 const ERDB_BACKDROP_LAYOUTS = new Set(["center", "right", "right-vertical"]);
+const ERDB_STREAM_BADGES = new Set(["auto", "on", "off"]);
+const ERDB_QUALITY_BADGE_SIDES = new Set(["left", "right"]);
 
 function normalizeErdbBaseUrl(value) {
     if (typeof value !== "string") return "";
@@ -329,6 +331,16 @@ function normalizeErdbPosterLayout(value) {
 function normalizeErdbBackdropLayout(value) {
     const normalized = String(value || "").trim().toLowerCase();
     return ERDB_BACKDROP_LAYOUTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbStreamBadges(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_STREAM_BADGES.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbQualityBadgesSide(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_QUALITY_BADGE_SIDES.has(normalized) ? normalized : "";
 }
 
 function normalizeErdbLang(value) {
@@ -433,6 +445,9 @@ function getErdbConfig(config = null) {
     const backdropImageText = normalizeErdbImageText(rawConfig.backdropImageText);
     const posterRatingsLayout = normalizeErdbPosterLayout(rawConfig.posterRatingsLayout);
     const backdropRatingsLayout = normalizeErdbBackdropLayout(rawConfig.backdropRatingsLayout);
+    const streamBadges = normalizeErdbStreamBadges(rawConfig.streamBadges);
+    const qualityBadgesSide = normalizeErdbQualityBadgesSide(rawConfig.qualityBadgesSide);
+    const qualityBadgesStyle = normalizeErdbStyle(rawConfig.qualityBadgesStyle);
     const maxPerSideRaw = rawConfig.posterRatingsMaxPerSide;
     const maxPerSideParsed = parseInt(maxPerSideRaw, 10);
     const posterRatingsMaxPerSide = Number.isFinite(maxPerSideParsed) && maxPerSideParsed >= 1 && maxPerSideParsed <= 20
@@ -462,6 +477,9 @@ function getErdbConfig(config = null) {
         posterRatingsLayout,
         posterRatingsMaxPerSide,
         backdropRatingsLayout,
+        streamBadges,
+        qualityBadgesSide,
+        qualityBadgesStyle,
         enabledTypes
     };
 }
@@ -476,6 +494,13 @@ function buildErdbUrl(config, assetType, erdbId) {
         query.set("ratings", config.ratings.join(","));
     }
     if (config.lang) query.set("lang", config.lang);
+    if (config.streamBadges) query.set("streamBadges", config.streamBadges);
+    if (config.qualityBadgesSide && assetType === "poster") {
+        query.set("qualityBadgesSide", config.qualityBadgesSide);
+    }
+    if (config.qualityBadgesStyle && assetType === "poster") {
+        query.set("qualityBadgesStyle", config.qualityBadgesStyle);
+    }
     const ratingStyle = assetType === "poster"
         ? config.posterRatingStyle
         : assetType === "backdrop"
