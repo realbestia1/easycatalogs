@@ -883,7 +883,14 @@ async function enrichAndMapItems(results, stremioType, tmdbType, config = null, 
 }
 
 const DEFAULT_TMDB_API_KEY = process.env.TMDB_API_KEY || "68e094699525b18a70bab2f86b1fa706";
+const DEFAULT_TVDB_API_KEY = process.env.TVDB_API_KEY || "";
+const DEFAULT_TVDB_PIN = process.env.TVDB_PIN || "";
 const BASE_URL = "https://api.themoviedb.org/3";
+const TVDB_BASE_URL = "https://api4.thetvdb.com/v4";
+const TVDB_ARTWORK_BASE_URL = "https://artworks.thetvdb.com";
+const TVDB_TOKEN_TTL_MS = 25 * 24 * 3600 * 1000;
+const TVDB_TRANSLATION_LANGUAGES = ["ita", "eng"];
+const tvdbTokenCache = new Map();
 function decodeBase64Literal(value) {
     return Buffer.from(String(value || ""), "base64").toString("utf8");
 }
@@ -1057,6 +1064,296 @@ function getTmdbApiKey(config = null) {
         : "";
     const isValidFormat = /^[a-f0-9]{32}$/i.test(customKey);
     return (isValidFormat ? customKey : "") || DEFAULT_TMDB_API_KEY;
+}
+
+function getTvdbApiKey(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const customKey = typeof resolvedConfig.tvdbApiKey === "string"
+        ? resolvedConfig.tvdbApiKey.trim()
+        : "";
+    return customKey || DEFAULT_TVDB_API_KEY;
+}
+
+function getTvdbPin(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const customPin = typeof resolvedConfig.tvdbPin === "string"
+        ? resolvedConfig.tvdbPin.trim()
+        : "";
+    return customPin || DEFAULT_TVDB_PIN;
+}
+
+function getSeriesMetaProvider(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    if (resolvedConfig.useTvdbSeriesMeta === true) return "tvdb";
+    const provider = typeof resolvedConfig.seriesMetaProvider === "string"
+        ? resolvedConfig.seriesMetaProvider.trim().toLowerCase()
+        : "";
+    return provider === "tvdb" ? "tvdb" : "tmdb";
+}
+
+function shouldUseTvdbForSeriesMeta(config = null) {
+    return getSeriesMetaProvider(config) === "tvdb" && !!getTvdbApiKey(config);
+}
+
+function extractNumericId(value) {
+    const rawValue = String(value || "").trim();
+    const match = rawValue.match(/^(\d+)$/);
+    return match ? match[1] : null;
+}
+
+function extractTmdbNumericId(value) {
+    const rawValue = String(value || "").trim();
+    if (!rawValue) return null;
+    const match = rawValue.match(/^tmdb:(?:movie|tv):(\d+)$/i) ||
+        rawValue.match(/^tmdb:(\d+)$/i) ||
+        rawValue.match(/^(\d+)$/);
+    return match ? match[1] : null;
+}
+
+function normalizeTvdbText(value) {
+    const trimmed = String(value || "").trim();
+    return trimmed || null;
+}
+
+function getTvdbImageUrl(value) {
+    const rawValue = normalizeTvdbText(value);
+    if (!rawValue) return null;
+    if (/^https?:\/\//i.test(rawValue)) return rawValue;
+    return `${TVDB_ARTWORK_BASE_URL}/${rawValue.replace(/^\/+/, "")}`;
+}
+
+function getTvdbSeasonTypeName(season) {
+    if (!season || typeof season !== "object") return "";
+    return String(
+        season.type && typeof season.type === "object"
+            ? season.type.name || ""
+            : season.typeName || season.type || ""
+    )
+        .trim()
+        .toLowerCase();
+}
+
+function isTvdbAiredOrderSeason(season) {
+    return getTvdbSeasonTypeName(season).includes("aired");
+}
+
+function getTvdbRemoteIds(record = {}) {
+    const remoteIds = Array.isArray(record.remoteIds) ? record.remoteIds : [];
+    let imdbId = null;
+    let tmdbId = null;
+
+    remoteIds.forEach(remoteId => {
+        const sourceName = String(
+            remoteId && (
+                remoteId.sourceName ||
+                remoteId.type ||
+                remoteId.idType ||
+                remoteId.sourceType ||
+                remoteId.name ||
+                ""
+            )
+        )
+            .trim()
+            .toLowerCase();
+        const value = String(
+            remoteId && (
+                remoteId.id ||
+                remoteId.remoteId ||
+                remoteId.value ||
+                remoteId.sourceId ||
+                remoteId.sourceValue ||
+                ""
+            )
+        ).trim();
+        if (!value) return;
+
+        if (!imdbId && sourceName.includes("imdb")) {
+            imdbId = normalizeImdbId(value);
+        }
+
+        if (!tmdbId && (sourceName.includes("moviedb") || sourceName.includes("tmdb"))) {
+            tmdbId = extractTmdbNumericId(value);
+        }
+    });
+
+    return { imdbId, tmdbId };
+}
+
+function getTvdbArtworkLanguage(artwork) {
+    return String(
+        artwork && (
+            artwork.language ||
+            artwork.lang ||
+            artwork.locale ||
+            artwork.iso639_1 ||
+            artwork.iso_639_1 ||
+            ""
+        )
+    )
+        .trim()
+        .toLowerCase();
+}
+
+function getTvdbArtworkUrl(record, matchers = []) {
+    const artworks = Array.isArray(record && record.artworks) ? record.artworks : [];
+    for (const matcher of matchers) {
+        const typedArtworks = artworks.filter(entry => {
+            const typeName = String(
+                entry && entry.type && typeof entry.type === "object"
+                    ? entry.type.name || ""
+                    : entry && (entry.typeName || entry.type || "")
+            )
+                .trim()
+                .toLowerCase();
+            return typeName.includes(matcher);
+        });
+        const preferredArtwork = typedArtworks.find(entry => ["ita", "it"].includes(getTvdbArtworkLanguage(entry))) ||
+            typedArtworks.find(entry => ["eng", "en"].includes(getTvdbArtworkLanguage(entry))) ||
+            typedArtworks.find(entry => !getTvdbArtworkLanguage(entry)) ||
+            typedArtworks[0];
+        const imageUrl = getTvdbImageUrl(preferredArtwork && (preferredArtwork.image || preferredArtwork.thumbnail));
+        if (imageUrl) return imageUrl;
+    }
+    return null;
+}
+
+function getTvdbTranslationField(translation, fieldNames = []) {
+    const containers = [
+        translation,
+        translation && translation.data,
+        translation && translation.translation
+    ].filter(Boolean);
+
+    for (const container of containers) {
+        for (const fieldName of fieldNames) {
+            const value = normalizeTvdbText(container && container[fieldName]);
+            if (value) return value;
+        }
+    }
+
+    return null;
+}
+
+async function fetchTvdbTranslation(entityType, entityId, language, config = null) {
+    const normalizedEntityType = String(entityType || "").trim().toLowerCase();
+    const cleanId = extractNumericId(entityId);
+    const normalizedLanguage = String(language || "").trim().toLowerCase();
+    if (!normalizedEntityType || !cleanId || !normalizedLanguage) return null;
+
+    const cacheKey = `tvdb:${normalizedEntityType}:translation:${cleanId}:${normalizedLanguage}`;
+    const cached = await cache.get(cacheKey);
+    if (isNegativeCache(cached)) return null;
+    if (cached) return cached;
+
+    try {
+        const payload = await fetchTvdbJson(`/${normalizedEntityType}/${cleanId}/translations/${normalizedLanguage}`, config);
+        if (payload && typeof payload === "object") {
+            await cache.set(cacheKey, payload, withTtlJitter(CACHE_TTL_SECONDS.detailsSeries));
+            return payload;
+        }
+    } catch (error) {
+        // Fall through to negative cache below.
+    }
+
+    await cache.set(cacheKey, createNegativeCache("tvdb_translation_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
+    return null;
+}
+
+async function fetchPreferredTvdbTranslation(entityType, entityId, config = null) {
+    for (const language of TVDB_TRANSLATION_LANGUAGES) {
+        const translation = await fetchTvdbTranslation(entityType, entityId, language, config);
+        if (translation) {
+            return { language, translation };
+        }
+    }
+    return null;
+}
+
+async function fetchTvdbToken(config = null, forceRefresh = false) {
+    const apiKey = getTvdbApiKey(config);
+    if (!apiKey) return null;
+
+    const pin = getTvdbPin(config);
+    const tokenCacheKey = `${apiKey}::${pin}`;
+    const cached = tvdbTokenCache.get(tokenCacheKey);
+    if (!forceRefresh && cached) {
+        if (cached.token && cached.expiresAt && cached.expiresAt > (Date.now() + 60 * 1000)) {
+            return cached.token;
+        }
+        if (cached.promise) {
+            return cached.promise;
+        }
+    }
+
+    const loginPayload = { apikey: apiKey };
+    if (pin) loginPayload.pin = pin;
+
+    const tokenPromise = (async () => {
+        const response = await fetch(`${TVDB_BASE_URL}/login`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json"
+            },
+            body: JSON.stringify(loginPayload)
+        });
+        const payload = await response.json().catch(() => null);
+        const token = payload && payload.data && typeof payload.data.token === "string"
+            ? payload.data.token.trim()
+            : "";
+        if (!response.ok || !token) {
+            throw new Error(payload && payload.message ? payload.message : `TVDB login failed (${response.status})`);
+        }
+        return token;
+    })();
+
+    tvdbTokenCache.set(tokenCacheKey, { promise: tokenPromise });
+
+    try {
+        const token = await tokenPromise;
+        tvdbTokenCache.set(tokenCacheKey, {
+            token,
+            expiresAt: Date.now() + TVDB_TOKEN_TTL_MS
+        });
+        return token;
+    } catch (error) {
+        tvdbTokenCache.delete(tokenCacheKey);
+        throw error;
+    }
+}
+
+async function fetchTvdbJson(pathname, config = null, options = {}) {
+    const token = await fetchTvdbToken(config, options.forceRefresh === true);
+    if (!token) return null;
+
+    const targetUrl = /^https?:\/\//i.test(pathname)
+        ? pathname
+        : `${TVDB_BASE_URL}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
+    const response = await fetch(targetUrl, {
+        method: options.method || "GET",
+        headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+            ...(options.headers || {})
+        },
+        body: options.body
+    });
+
+    if (response.status === 401 && !options._retried) {
+        try {
+            await fetchTvdbToken(config, true);
+        } catch (error) {
+            return null;
+        }
+        return fetchTvdbJson(pathname, config, { ...options, _retried: true, forceRefresh: false });
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload || payload.status === "failure") {
+        return null;
+    }
+
+    return payload.data !== undefined ? payload.data : null;
 }
 
 function getTmdbTranslationTitle(entry, isMovie) {
@@ -3072,6 +3369,435 @@ async function resolveTmdbIdFromImdb(imdbId, requestedType, config = null) {
     return null;
 }
 
+async function resolveTvdbSeriesIdFromRemoteId(remoteId, config = null) {
+    const normalizedRemoteId = String(remoteId || "").trim();
+    if (!normalizedRemoteId) return null;
+
+    const cacheKey = `tvdb:search:remoteid:${normalizedRemoteId.toLowerCase()}`;
+    const cached = await cache.get(cacheKey);
+    if (isNegativeCache(cached)) return null;
+    if (cached && cached.tvdbId) return cached.tvdbId;
+
+    try {
+        const payload = await fetchTvdbJson(`/search/remoteid/${encodeURIComponent(normalizedRemoteId)}`, config);
+        const candidates = Array.isArray(payload)
+            ? payload
+            : (payload ? [payload] : []);
+        const preferredCandidate = candidates.find(candidate => {
+            const typeName = String(
+                candidate && (
+                    (candidate.type && typeof candidate.type === "object" ? candidate.type.name : candidate.type) ||
+                    candidate.objectType ||
+                    candidate.entityType ||
+                    ""
+                )
+            )
+                .trim()
+                .toLowerCase();
+            return !typeName || typeName.includes("series");
+        }) || candidates[0];
+        const tvdbId = extractNumericId(
+            preferredCandidate && (
+                preferredCandidate.tvdb_id ||
+                preferredCandidate.id ||
+                preferredCandidate.objectID ||
+                preferredCandidate.objectId
+            )
+        );
+
+        if (tvdbId) {
+            await cache.set(cacheKey, { tvdbId }, withTtlJitter(CACHE_TTL_SECONDS.detailsSeries));
+            return tvdbId;
+        }
+    } catch (error) {
+        // Fall through to negative cache below.
+    }
+
+    await cache.set(cacheKey, createNegativeCache("tvdb_search_remoteid_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
+    return null;
+}
+
+async function fetchTvdbSeriesExtended(tvdbId, config = null) {
+    const cleanId = extractNumericId(tvdbId);
+    if (!cleanId) return null;
+
+    const cacheKey = `tvdb:series:extended:${cleanId}`;
+    const cached = await cache.get(cacheKey);
+    if (isNegativeCache(cached)) return null;
+    if (cached) return cached;
+
+    try {
+        const payload = await fetchTvdbJson(`/series/${cleanId}/extended?meta=translations&short=false`, config);
+        if (payload && typeof payload === "object") {
+            await cache.set(cacheKey, payload, withTtlJitter(CACHE_TTL_SECONDS.detailsSeries));
+            return payload;
+        }
+    } catch (error) {
+        // Fall through to negative cache below.
+    }
+
+    await cache.set(cacheKey, createNegativeCache("tvdb_series_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
+    return null;
+}
+
+async function fetchTvdbSeasonExtended(seasonId, config = null) {
+    const cleanId = extractNumericId(seasonId);
+    if (!cleanId) return null;
+
+    const cacheKey = `tvdb:season:extended:${cleanId}`;
+    const cached = await cache.get(cacheKey);
+    if (isNegativeCache(cached)) return null;
+    if (cached) return cached;
+
+    try {
+        const payload = await fetchTvdbJson(`/seasons/${cleanId}/extended?meta=translations`, config);
+        if (payload && typeof payload === "object") {
+            await cache.set(cacheKey, payload, withTtlJitter(CACHE_TTL_SECONDS.detailsSeries));
+            return payload;
+        }
+    } catch (error) {
+        // Fall through to negative cache below.
+    }
+
+    await cache.set(cacheKey, createNegativeCache("tvdb_season_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
+    return null;
+}
+
+function getTvdbSeriesTitle(series) {
+    return normalizeTvdbText(series && (
+        series.name ||
+        series.seriesName ||
+        series.slug
+    ));
+}
+
+function getTvdbSeriesOverview(series) {
+    return normalizeTvdbText(series && series.overview);
+}
+
+function getTvdbGenreNames(series) {
+    const genres = Array.isArray(series && series.genres) ? series.genres : [];
+    return genres
+        .map(entry => normalizeTvdbText(entry && (entry.name || entry.genreName || entry.slug || entry)))
+        .filter(Boolean);
+}
+
+function getTvdbCastNames(series) {
+    const characters = Array.isArray(series && series.characters) ? series.characters : [];
+    const castNames = [];
+
+    characters.forEach(entry => {
+        const personName = normalizeTvdbText(
+            entry && (
+                entry.personName ||
+                (entry.person && entry.person.name) ||
+                entry.name
+            )
+        );
+        if (!personName || castNames.includes(personName)) return;
+        castNames.push(personName);
+    });
+
+    return castNames.slice(0, 10);
+}
+
+function getTvdbRuntime(series) {
+    const runtime = Number.parseInt(String(
+        series && (
+            series.averageRuntime ||
+            series.runtime ||
+            series.average_run_time ||
+            ""
+        )
+    ), 10);
+    return Number.isFinite(runtime) && runtime > 0 ? `${runtime} min` : null;
+}
+
+function getTvdbReleaseInfo(series) {
+    const firstAired = normalizeTvdbText(series && series.firstAired);
+    const lastAired = normalizeTvdbText(series && series.lastAired);
+    const startYear = firstAired ? firstAired.slice(0, 4) : normalizeTvdbText(series && series.year);
+    const endYear = lastAired ? lastAired.slice(0, 4) : null;
+    const statusName = String(
+        series && (
+            (series.status && typeof series.status === "object" ? series.status.name : series.status) ||
+            ""
+        )
+    )
+        .trim()
+        .toLowerCase();
+
+    if (!startYear) return "";
+    if (statusName.includes("continuing") || statusName.includes("upcoming") || statusName.includes("planned")) {
+        return `${startYear}-`;
+    }
+    if (endYear && endYear !== startYear) {
+        return `${startYear}-${endYear}`;
+    }
+    return startYear;
+}
+
+function getTvdbEpisodeNumber(episode) {
+    const candidates = [
+        episode && episode.number,
+        episode && episode.airedEpisodeNumber,
+        episode && episode.episodeNumber
+    ];
+
+    for (const value of candidates) {
+        const parsed = Number.parseInt(String(value || ""), 10);
+        if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+
+    return null;
+}
+
+async function resolveTvdbSeriesContext(id, config = null) {
+    const normalizedId = String(id || "").trim();
+    let imdbId = normalizeImdbId(normalizedId);
+    let tmdbId = extractTmdbNumericId(normalizedId);
+    let tmdbDetails = null;
+    let tvdbId = null;
+
+    if (tmdbId) {
+        tmdbDetails = await fetchTmdbDetails("tv", tmdbId, config);
+        const externalIds = tmdbDetails && tmdbDetails.external_ids ? tmdbDetails.external_ids : {};
+        if (externalIds.tvdb_id) {
+            tvdbId = String(externalIds.tvdb_id).trim();
+        }
+        if (!imdbId) {
+            imdbId = normalizeImdbId(externalIds.imdb_id);
+        }
+    }
+
+    if (imdbId && !tvdbId) {
+        tvdbId = await resolveTvdbSeriesIdFromRemoteId(imdbId, config);
+    }
+
+    if (imdbId && !tmdbId) {
+        tmdbId = await resolveTmdbIdFromImdb(imdbId, "series", config);
+    }
+
+    if (tmdbId && !tmdbDetails) {
+        tmdbDetails = await fetchTmdbDetails("tv", tmdbId, config);
+    }
+
+    if (!tvdbId && tmdbDetails && tmdbDetails.external_ids && tmdbDetails.external_ids.tvdb_id) {
+        tvdbId = String(tmdbDetails.external_ids.tvdb_id).trim();
+    }
+
+    return {
+        imdbId,
+        tmdbId,
+        tvdbId: extractNumericId(tvdbId),
+        tmdbDetails
+    };
+}
+
+async function buildTvdbSeriesVideos(series, imdbId, tmdbId, fallbackThumbnail, config = null) {
+    const airedSeasons = (Array.isArray(series && series.seasons) ? series.seasons : [])
+        .filter(isTvdbAiredOrderSeason)
+        .map(season => ({
+            ...season,
+            parsedNumber: Number.parseInt(String(season && season.number || ""), 10)
+        }))
+        .filter(season => Number.isFinite(season.parsedNumber))
+        .sort((left, right) => left.parsedNumber - right.parsedNumber);
+
+    const baseMediaId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : null);
+    const resolvedConfig = getRequestConfig(config);
+    const episodeJobs = [];
+    const seasonPayloads = await Promise.all(airedSeasons.map(async season => {
+        const payload = await fetchTvdbSeasonExtended(season.id, config);
+        return { season, payload };
+    }));
+
+    seasonPayloads.forEach(({ season, payload }) => {
+        const seasonNumber = Number.parseInt(String(
+            payload && payload.number !== undefined
+                ? payload.number
+                : season.parsedNumber
+        ), 10);
+        if (!Number.isFinite(seasonNumber)) return;
+
+        const episodes = Array.isArray(payload && payload.episodes) ? [...payload.episodes] : [];
+        episodes
+            .map(episode => ({
+                episode,
+                episodeNumber: getTvdbEpisodeNumber(episode)
+            }))
+            .filter(item => Number.isFinite(item.episodeNumber))
+            .sort((left, right) => left.episodeNumber - right.episodeNumber)
+            .forEach(({ episode, episodeNumber }) => {
+                episodeJobs.push({
+                    seasonNumber,
+                    episode,
+                    episodeNumber
+                });
+            });
+    });
+
+    const translatedVideos = await mapWithConcurrency(episodeJobs, 8, async ({ seasonNumber, episode, episodeNumber }) => {
+        const releasedValue = normalizeTvdbText(
+            episode && (episode.aired || episode.firstAired || episode.airDate)
+        );
+        let released = null;
+        if (releasedValue) {
+            try {
+                released = new Date(releasedValue).toISOString();
+            } catch (error) {
+                released = null;
+            }
+        }
+
+        const episodeMediaId = baseMediaId ? `${baseMediaId}:${seasonNumber}:${episodeNumber}` : null;
+        const configuredThumbnailUrl = episodeMediaId
+            ? getConfiguredAssetUrl(resolvedConfig, "thumbnail", imdbId, tmdbId, episodeMediaId)
+            : null;
+        const preferredTranslation = episode && episode.id
+            ? await fetchPreferredTvdbTranslation("episodes", episode.id, config)
+            : null;
+        const translation = preferredTranslation ? preferredTranslation.translation : null;
+        const localizedTitle = getTvdbTranslationField(translation, ["name"]);
+        const localizedOverview = getTvdbTranslationField(translation, ["overview"]);
+
+        return {
+            id: `${baseMediaId || `tmdb:${tmdbId}`}:${seasonNumber}:${episodeNumber}`,
+            title: localizedTitle || normalizeTvdbText(episode && episode.name) || `Episode ${episodeNumber}`,
+            released,
+            thumbnail: configuredThumbnailUrl || getTvdbImageUrl(episode && episode.image) || fallbackThumbnail || undefined,
+            overview: localizedOverview || normalizeTvdbText(episode && episode.overview) || undefined,
+            season: seasonNumber,
+            episode: episodeNumber
+        };
+    });
+
+    const videos = translatedVideos.filter(Boolean);
+    videos.sort((left, right) => {
+        if (left.season !== right.season) return left.season - right.season;
+        return left.episode - right.episode;
+    });
+
+    return videos;
+}
+
+async function buildMetaForTvdbSeriesId(id, config = null) {
+    const context = await resolveTvdbSeriesContext(id, config);
+    if (!context.tvdbId) return null;
+
+    const series = await fetchTvdbSeriesExtended(context.tvdbId, config);
+    if (!series) return null;
+
+    const remoteIds = getTvdbRemoteIds(series);
+    const imdbId = context.imdbId || remoteIds.imdbId;
+    const tmdbId = context.tmdbId || remoteIds.tmdbId;
+    const metaId = imdbId || (tmdbId ? `tmdb:${tmdbId}` : null);
+    if (!metaId) return null;
+
+    const resolvedConfig = getRequestConfig(config);
+    const tmdbBaseMeta = context.tmdbDetails
+        ? await transformToMeta(context.tmdbDetails, "series", config, { includeVideos: false })
+        : null;
+    const preferredTranslation = await fetchPreferredTvdbTranslation("series", context.tvdbId, config);
+    const seriesTranslation = preferredTranslation ? preferredTranslation.translation : null;
+    const firstAired = normalizeTvdbText(series.firstAired);
+    let released = null;
+    if (firstAired) {
+        try {
+            released = new Date(firstAired).toISOString();
+        } catch (error) {
+            released = null;
+        }
+    }
+
+    const title = getTvdbTranslationField(seriesTranslation, ["name"]) || getTvdbSeriesTitle(series);
+    const description = getTvdbTranslationField(seriesTranslation, ["overview"]) ||
+        getTvdbSeriesOverview(series) ||
+        (tmdbBaseMeta ? tmdbBaseMeta.description : null) ||
+        (context.tmdbDetails ? context.tmdbDetails.overview : null);
+    const year = firstAired ? firstAired.slice(0, 4) : normalizeTvdbText(series.year);
+    const releaseInfo = getTvdbReleaseInfo(series);
+    const posterFallback = getTvdbArtworkUrl(series, ["poster"]) || getTvdbImageUrl(series.image);
+    const backgroundFallback = getTvdbArtworkUrl(series, ["fanart", "background", "banner"]) || posterFallback;
+    const logoFallback = getTvdbArtworkUrl(series, ["clearlogo", "logo"]);
+    const poster = (tmdbBaseMeta && tmdbBaseMeta.poster) ||
+        getConfiguredAssetUrl(resolvedConfig, "poster", imdbId, tmdbId, null, "series") ||
+        posterFallback ||
+        undefined;
+    const background = (tmdbBaseMeta && tmdbBaseMeta.background) ||
+        getConfiguredAssetUrl(resolvedConfig, "backdrop", imdbId, tmdbId, null, "series") ||
+        backgroundFallback ||
+        undefined;
+    const logo = (tmdbBaseMeta && tmdbBaseMeta.logo) ||
+        getConfiguredAssetUrl(resolvedConfig, "logo", imdbId, tmdbId, null, "series") ||
+        logoFallback ||
+        undefined;
+    const videos = await buildTvdbSeriesVideos(
+        series,
+        imdbId,
+        tmdbId,
+        (tmdbBaseMeta && (tmdbBaseMeta.background || tmdbBaseMeta.poster)) || background || poster || null,
+        config
+    );
+
+    if (tmdbBaseMeta) {
+        return {
+            ...tmdbBaseMeta,
+            id: metaId,
+            type: "series",
+            name: title || tmdbBaseMeta.name || metaId,
+            description: description || tmdbBaseMeta.description || undefined,
+            releaseInfo: releaseInfo || tmdbBaseMeta.releaseInfo || "",
+            released: released || tmdbBaseMeta.released || null,
+            year: year || tmdbBaseMeta.year || undefined,
+            poster,
+            background,
+            logo,
+            behaviorHints: {
+                ...(tmdbBaseMeta.behaviorHints || {}),
+                defaultVideoId: null,
+                hasScheduledVideos: true
+            },
+            videos
+        };
+    }
+
+    return {
+        id: metaId,
+        type: "series",
+        name: title || (context.tmdbDetails ? getPreferredTmdbTitle(context.tmdbDetails, "series") : metaId),
+        poster,
+        background,
+        logo,
+        description: description || undefined,
+        releaseInfo,
+        released,
+        year: year || undefined,
+        imdbRating: imdbId
+            ? await getImdbRating(imdbId, "series")
+            : null,
+        genres: getTvdbGenreNames(series),
+        cast: getTvdbCastNames(series),
+        director: [],
+        writer: [],
+        links: imdbId
+            ? [{
+                name: "IMDb",
+                category: "imdb",
+                url: `https://imdb.com/title/${imdbId}`
+            }]
+            : [],
+        runtime: getTvdbRuntime(series),
+        trailers: [],
+        trailerStreams: [],
+        behaviorHints: {
+            defaultVideoId: null,
+            hasScheduledVideos: true
+        },
+        videos
+    };
+}
+
 async function fetchValidatedAnimeTmdbDetails(typePath, tmdbId, config = null) {
     const details = await fetchTmdbDetails(typePath, tmdbId, config);
     if (!details) {
@@ -4239,7 +4965,7 @@ const PROVIDERS_SERIES_ONLY = new Set(["Discovery+"]);
 
 const manifest = {
     id: "org.bestia.easycatalogs",
-    version: "1.0.52",
+    version: "1.0.53",
     name: "Easy Catalogs",
     description: "Easy Catalogs per Stremio",
     behaviorHints: {
@@ -4661,6 +5387,18 @@ builder.defineMetaHandler(async ({ type, id }) => {
             console.error(`[Easy Catalogs] Kitsu Meta Error: ${e.message}`);
             await cache.set(cacheKey, createNegativeCache("kitsu_meta_fetch_failed"), NEGATIVE_CACHE_TTL_SECONDS);
             return { meta: {} };
+        }
+    }
+
+    if (type === "series" && shouldUseTvdbForSeriesMeta(config)) {
+        try {
+            const tvdbMeta = await buildMetaForTvdbSeriesId(id, config);
+            if (tvdbMeta) {
+                await cache.set(cacheKey, tvdbMeta, withTtlJitter(metaTtl));
+                return { meta: tvdbMeta };
+            }
+        } catch (error) {
+            console.warn(`[Easy Catalogs] TVDB Meta fallback for ${id}: ${error.message}`);
         }
     }
     
