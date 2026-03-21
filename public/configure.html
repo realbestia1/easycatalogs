@@ -1759,33 +1759,6 @@
                                 </div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
-                                <label for="tvdbApiKey">TVDB API Key (opzionale)</label>
-                                <input type="text" id="tvdbApiKey" placeholder="Usa la tua chiave TVDB personale...">
-                                <div class="input-hint">
-                                    Se attivi TVDB per il meta serie, l'addon usera questa chiave per titoli, stagioni ed episodi in Aired Order.
-                                    <a href="https://thetvdb.com/api-information" target="_blank" rel="noopener">Info API su thetvdb.com</a>
-                                </div>
-                            </div>
-                            <div class="input-group" style="margin-top: 1rem;">
-                                <label for="tvdbPin">TVDB PIN (opzionale)</label>
-                                <input type="text" id="tvdbPin" placeholder="Inserisci il PIN se richiesto dalla tua chiave TVDB">
-                                <div class="input-hint">
-                                    Alcune chiavi TVDB richiedono anche un PIN. Se non ti serve, lascia vuoto.
-                                </div>
-                            </div>
-                            <div class="input-group" style="margin-top: 1rem;">
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="useTvdbSeriesMeta">
-                                        <div class="feature-toggle-title">TVDB Meta Serie (Recommended)</div>
-                                        <div class="feature-toggle-hint">Usa TVDB solo per il meta delle serie TV e l'Aired Order degli episodi.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="useTvdbSeriesMeta">
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="input-group" style="margin-top: 1rem;">
                                 <label for="erdbConfig">ERDB Config (base64url)</label>
                                 <input type="text" id="erdbConfig" placeholder="Incolla la stringa base64url di ERDB">
                                 <div class="input-hint">
@@ -2952,16 +2925,6 @@
                 document.getElementById("tmdbApiKey").value = resolvedConfig.tmdbApiKey;
             }
 
-            if (typeof resolvedConfig.tvdbApiKey === "string") {
-                document.getElementById("tvdbApiKey").value = resolvedConfig.tvdbApiKey;
-            }
-
-            if (typeof resolvedConfig.tvdbPin === "string") {
-                document.getElementById("tvdbPin").value = resolvedConfig.tvdbPin;
-            }
-
-            document.getElementById("useTvdbSeriesMeta").checked = resolvedConfig.useTvdbSeriesMeta === true || resolvedConfig.seriesMetaProvider === "tvdb";
-
             applyErdbConfigFields(resolvedConfig);
 
             if (typeof resolvedConfig.catalogs !== "string" || !resolvedConfig.catalogs.trim()) return;
@@ -3421,15 +3384,9 @@
         function getConfiguration() {
             const config = {};
             const tmdbApiKey = document.getElementById("tmdbApiKey").value.trim();
-            const tvdbApiKey = document.getElementById("tvdbApiKey").value.trim();
-            const tvdbPin = document.getElementById("tvdbPin").value.trim();
-            const useTvdbSeriesMeta = document.getElementById("useTvdbSeriesMeta").checked;
             const returnStreams = document.getElementById("returnStreams").checked;
 
             if (tmdbApiKey) config.tmdbApiKey = tmdbApiKey;
-            if (tvdbApiKey) config.tvdbApiKey = tvdbApiKey;
-            if (tvdbPin) config.tvdbPin = tvdbPin;
-            if (useTvdbSeriesMeta) config.seriesMetaProvider = "tvdb";
             if (!returnStreams) config.returnStreams = false;
 
             const erdbConfigValue = document.getElementById("erdbConfig").value.trim();
