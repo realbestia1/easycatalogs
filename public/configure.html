@@ -1799,6 +1799,16 @@
                                         <span class="slider"></span>
                                     </label>
                                 </div>
+                                <div class="feature-toggle-row">
+                                    <label class="feature-toggle-copy" for="erdbEnableThumbnail">
+                                        <div class="feature-toggle-title">Thumbnail</div>
+                                        <div class="feature-toggle-hint">Usa ERDB per le thumbnail degli episodi.</div>
+                                    </label>
+                                    <label class="switch">
+                                        <input type="checkbox" id="erdbEnableThumbnail" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
                                 <div class="input-hint">Se un tipo è disattivato, l'addon mantiene l'artwork originale.</div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
@@ -2183,9 +2193,11 @@
             const posterToggle = document.getElementById('erdbEnablePoster');
             const backdropToggle = document.getElementById('erdbEnableBackdrop');
             const logoToggle = document.getElementById('erdbEnableLogo');
+            const thumbnailToggle = document.getElementById('erdbEnableThumbnail');
             if (posterToggle) posterToggle.checked = enabledTypes.poster !== false;
             if (backdropToggle) backdropToggle.checked = enabledTypes.backdrop !== false;
             if (logoToggle) logoToggle.checked = enabledTypes.logo !== false;
+            if (thumbnailToggle) thumbnailToggle.checked = enabledTypes.thumbnail !== false;
             updateErdbToggleVisibility();
         }
 
@@ -3396,6 +3408,7 @@
                 if (!document.getElementById("erdbEnablePoster").checked) erdbTypes.poster = false;
                 if (!document.getElementById("erdbEnableBackdrop").checked) erdbTypes.backdrop = false;
                 if (!document.getElementById("erdbEnableLogo").checked) erdbTypes.logo = false;
+                if (!document.getElementById("erdbEnableThumbnail").checked) erdbTypes.thumbnail = false;
                 if (Object.keys(erdbTypes).length > 0) config.erdbTypes = erdbTypes;
             }
 

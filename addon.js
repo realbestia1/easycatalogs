@@ -311,6 +311,27 @@ const ERDB_RATING_STYLES = new Set(["glass", "square", "plain"]);
 const ERDB_IMAGE_TEXTS = new Set(["original", "clean", "alternative"]);
 const ERDB_POSTER_LAYOUTS = new Set(["top", "bottom", "left", "right", "top-bottom", "left-right"]);
 const ERDB_BACKDROP_LAYOUTS = new Set(["center", "right", "right-vertical"]);
+const ERDB_THUMBNAIL_LAYOUTS = new Set([
+    "center",
+    "center-top",
+    "center-bottom",
+    "center-vertical",
+    "center-top-vertical",
+    "center-bottom-vertical",
+    "left",
+    "left-top",
+    "left-bottom",
+    "left-vertical",
+    "left-top-vertical",
+    "left-bottom-vertical",
+    "right",
+    "right-top",
+    "right-bottom",
+    "right-vertical",
+    "right-top-vertical",
+    "right-bottom-vertical"
+]);
+const ERDB_THUMBNAIL_SIZES = new Set(["small", "medium", "large"]);
 const ERDB_STREAM_BADGES = new Set(["auto", "on", "off"]);
 const ERDB_QUALITY_BADGE_SIDES = new Set(["left", "right"]);
 
@@ -360,6 +381,16 @@ function normalizeErdbPosterLayout(value) {
 function normalizeErdbBackdropLayout(value) {
     const normalized = String(value || "").trim().toLowerCase();
     return ERDB_BACKDROP_LAYOUTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbThumbnailLayout(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_THUMBNAIL_LAYOUTS.has(normalized) ? normalized : "";
+}
+
+function normalizeErdbThumbnailSize(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return ERDB_THUMBNAIL_SIZES.has(normalized) ? normalized : "";
 }
 
 function normalizeErdbStreamBadges(value) {
@@ -418,6 +449,13 @@ function getErdbPreferredValue(...values) {
 function normalizeErdbId(value) {
     const rawValue = String(value || "").trim();
     if (!rawValue) return null;
+
+    const episodeMatch = rawValue.match(/^(tt\d+|tmdb:(?:movie:|tv:)?\d+|kitsu:\d+|anilist:\d+|myanimelist:\d+|mal:\d+):(\d+):(\d+)$/i);
+    if (episodeMatch) {
+        const baseId = normalizeErdbId(episodeMatch[1]);
+        if (!baseId) return null;
+        return `${baseId}:${episodeMatch[2]}:${episodeMatch[3]}`;
+    }
 
     const imdbMatch = rawValue.match(/^tt\d+$/i);
     if (imdbMatch) return rawValue.toLowerCase();
@@ -498,7 +536,8 @@ function getErdbConfig(config = null) {
     const enabledTypes = {
         poster: enabledTypesRaw.poster !== false,
         backdrop: enabledTypesRaw.backdrop !== false,
-        logo: enabledTypesRaw.logo !== false
+        logo: enabledTypesRaw.logo !== false,
+        thumbnail: enabledTypesRaw.thumbnail !== false
     };
 
     return {
@@ -526,12 +565,12 @@ function buildErdbUrl(config, assetType, erdbId) {
     const ratingStyle = getErdbPreferredValue(
         assetType === "poster"
             ? rawConfig.posterRatingStyle
-            : assetType === "backdrop"
+            : assetType === "backdrop" || assetType === "thumbnail"
                 ? rawConfig.backdropRatingStyle
                 : rawConfig.logoRatingStyle,
         rawConfig.ratingStyle
     );
-    const imageText = assetType === "logo"
+    const imageText = assetType === "logo" || assetType === "thumbnail"
         ? undefined
         : getErdbPreferredValue(
             assetType === "backdrop"
@@ -539,34 +578,71 @@ function buildErdbUrl(config, assetType, erdbId) {
                 : rawConfig.posterImageText,
             rawConfig.imageText
         );
+    const thumbnailRatings = normalizeErdbQueryParam(
+        Array.isArray(rawConfig.thumbnailRatings)
+            ? rawConfig.thumbnailRatings.filter(provider => ["tmdb", "imdb"].includes(String(provider || "").trim().toLowerCase()))
+            : (typeof rawConfig.thumbnailRatings === "string"
+                ? rawConfig.thumbnailRatings
+                    .split(",")
+                    .map(provider => String(provider || "").trim().toLowerCase())
+                    .filter(provider => provider === "tmdb" || provider === "imdb")
+                : ["tmdb", "imdb"]),
+        { preserveEmpty: true }
+    );
+    const resolvedRatings = assetType === "thumbnail"
+        ? thumbnailRatings
+        : getErdbPreferredValue(
+            assetType === "poster" ? rawConfig.posterRatings : undefined,
+            assetType === "backdrop" ? rawConfig.backdropRatings : undefined,
+            assetType === "logo" ? rawConfig.logoRatings : undefined,
+            rawConfig.ratings
+        );
+    const posterRatings = assetType === "poster"
+        ? normalizeErdbQueryParam(rawConfig.posterRatings, { preserveEmpty: true })
+        : undefined;
+    const backdropRatings = assetType === "backdrop"
+        ? normalizeErdbQueryParam(rawConfig.backdropRatings, { preserveEmpty: true })
+        : undefined;
+    const logoRatings = assetType === "logo"
+        ? normalizeErdbQueryParam(rawConfig.logoRatings, { preserveEmpty: true })
+        : undefined;
+    const qualityBadgesStyle = getErdbPreferredValue(
+        assetType === "poster" ? rawConfig.posterQualityBadgesStyle : undefined,
+        assetType === "backdrop" || assetType === "thumbnail" ? rawConfig.backdropQualityBadgesStyle : undefined,
+        rawConfig.qualityBadgesStyle
+    );
 
     setQueryParam("tmdbKey", config.tmdbKey);
     setQueryParam("mdblistKey", config.mdblistKey);
     setQueryParam("simklClientId", config.simklClientId);
-    setQueryParam("ratings", rawConfig.ratings, { preserveEmpty: true });
-    setQueryParam("posterRatings", rawConfig.posterRatings, { preserveEmpty: true });
-    setQueryParam("backdropRatings", rawConfig.backdropRatings, { preserveEmpty: true });
-    setQueryParam("logoRatings", rawConfig.logoRatings, { preserveEmpty: true });
+    setQueryParam("ratings", resolvedRatings, { preserveEmpty: true });
+    setQueryParam("posterRatings", posterRatings, { preserveEmpty: true });
+    setQueryParam("backdropRatings", backdropRatings, { preserveEmpty: true });
+    setQueryParam("logoRatings", logoRatings, { preserveEmpty: true });
     setQueryParam("lang", rawConfig.lang);
     setQueryParam("streamBadges", rawConfig.streamBadges);
     setQueryParam("posterStreamBadges", rawConfig.posterStreamBadges);
     setQueryParam("backdropStreamBadges", rawConfig.backdropStreamBadges);
     setQueryParam("qualityBadgesSide", rawConfig.qualityBadgesSide);
     setQueryParam("posterQualityBadgesPosition", rawConfig.posterQualityBadgesPosition);
-    setQueryParam("qualityBadgesStyle", rawConfig.qualityBadgesStyle);
-    setQueryParam("posterQualityBadgesStyle", rawConfig.posterQualityBadgesStyle);
-    setQueryParam("backdropQualityBadgesStyle", rawConfig.backdropQualityBadgesStyle);
+    setQueryParam("qualityBadgesStyle", qualityBadgesStyle);
+    setQueryParam("posterQualityBadgesStyle", assetType === "poster" ? rawConfig.posterQualityBadgesStyle : undefined);
+    setQueryParam("backdropQualityBadgesStyle", assetType === "backdrop" || assetType === "thumbnail" ? rawConfig.backdropQualityBadgesStyle : undefined);
     setQueryParam("ratingStyle", ratingStyle);
-    if (assetType !== "logo") {
+    if (assetType !== "logo" && assetType !== "thumbnail") {
         setQueryParam("imageText", imageText);
     }
     setQueryParam("posterRatingsLayout", rawConfig.posterRatingsLayout);
     setQueryParam("posterRatingsMaxPerSide", rawConfig.posterRatingsMaxPerSide);
     setQueryParam("backdropRatingsLayout", rawConfig.backdropRatingsLayout);
+    if (assetType === "thumbnail") {
+        setQueryParam("thumbnailRatingsLayout", normalizeErdbThumbnailLayout(rawConfig.thumbnailRatingsLayout));
+        setQueryParam("thumbnailSize", normalizeErdbThumbnailSize(rawConfig.thumbnailSize));
+    }
 
     const baseUrl = config.baseUrl.replace(/\/+$/g, "");
-    const encodedId = encodeURIComponent(erdbId);
-    return `${baseUrl}/${assetType}/${encodedId}.jpg?${query.toString()}`;
+    const queryString = query.toString();
+    return `${baseUrl}/${assetType}/${erdbId}.jpg${queryString ? `?${queryString}` : ""}`;
 }
 
 function getConfiguredAssetUrl(config, assetType, imdbId, tmdbId, mediaIdOverride = null, mediaType = null) {
