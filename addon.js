@@ -498,6 +498,11 @@ function normalizeErdbId(value) {
         return `${baseId}:${episodeMatch[2]}:${episodeMatch[3]}`;
     }
 
+    const animeEpisodeMatch = rawValue.match(/^(kitsu|anilist|myanimelist|mal):(\d+):(\d+)$/i);
+    if (animeEpisodeMatch) {
+        return `${animeEpisodeMatch[1].toLowerCase()}:${animeEpisodeMatch[2]}:${animeEpisodeMatch[3]}`;
+    }
+
     const imdbMatch = rawValue.match(/^tt\d+$/i);
     if (imdbMatch) return rawValue.toLowerCase();
 
@@ -6101,5 +6106,4 @@ try {
 app.listen(PORT, () => {
     console.log(`Addon active on http://localhost:${PORT}`);
 });
-
 
