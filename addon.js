@@ -661,6 +661,7 @@ function buildErdbUrl(config, assetType, erdbId) {
     setQueryParam("backdropRatingsLayout", rawConfig.backdropRatingsLayout);
     setQueryParam("posterVerticalBadgeContent", rawConfig.posterVerticalBadgeContent);
     setQueryParam("backdropVerticalBadgeContent", rawConfig.backdropVerticalBadgeContent);
+    setQueryParam("thumbnailVerticalBadgeContent", rawConfig.thumbnailVerticalBadgeContent);
     if (assetType === "thumbnail") {
         setQueryParam("thumbnailRatingsLayout", rawConfig.thumbnailRatingsLayout);
         setQueryParam("thumbnailSize", rawConfig.thumbnailSize);
@@ -2734,7 +2735,7 @@ async function fetchTop10CatalogMetas(catalogId, requestedType, extra = {}, conf
     const configHash = config && typeof config === "object" && Object.keys(config).length > 0
         ? JSON.stringify(config)
         : "default";
-    const cacheKey = `top10:catalog:v5:${normalizedCatalogId}:${requestedType}:${configHash}`;
+    const cacheKey = `top10:catalog:v6:${normalizedCatalogId}:${requestedType}:${configHash}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
@@ -4459,7 +4460,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
     const erdbTypesKey = resolvedConfig.erdbTypes && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
         : {};
-    const cacheKey = `kitsu:catalog:v21:${normalizedCatalogId}:${JSON.stringify({
+    const cacheKey = `kitsu:catalog:v22:${normalizedCatalogId}:${JSON.stringify({
         skip,
         search,
         discover,
@@ -5107,7 +5108,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
     
     const config = getRequestConfig();
     const configHash = Object.keys(config).length > 0 ? JSON.stringify(config) : "default";
-    const cacheKey = `meta_v17:${type}:${id}:${configHash}`;
+    const cacheKey = `meta_v18:${type}:${id}:${configHash}`;
     const metaTtl = type === "movie" ? CACHE_TTL_SECONDS.metaMovie : CACHE_TTL_SECONDS.metaSeries;
     
     const cached = await cache.get(cacheKey);
