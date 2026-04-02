@@ -538,6 +538,7 @@ function decodeErdbConfig(value) {
     const trimmed = value.trim();
     if (!trimmed) return null;
     try {
+        // Support base64url directly via Buffer
         return JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8"));
     } catch (err) {
         return null;
@@ -696,12 +697,9 @@ function getErdbConfig(config = null) {
     const rawConfig = decodeErdbConfig(encodedConfig);
     if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) return null;
 
-    const baseUrl = normalizeErdbBaseUrl(rawConfig.baseUrl);
-    const tmdbKey = normalizeErdbQueryParam(rawConfig.tmdbKey);
-    const mdblistKey = normalizeErdbQueryParam(rawConfig.mdblistKey);
-    const simklClientId = normalizeErdbQueryParam(rawConfig.simklClientId);
-
-    if (!baseUrl || !tmdbKey || !mdblistKey) return null;
+    // The user provided config string should contain erdbBase or baseUrl
+    const baseUrl = normalizeErdbBaseUrl(rawConfig.erdbBase || rawConfig.baseUrl);
+    if (!baseUrl || !rawConfig.tmdbKey || !rawConfig.mdblistKey) return null;
 
     const enabledTypesRaw = resolvedConfig && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
@@ -715,100 +713,49 @@ function getErdbConfig(config = null) {
 
     return {
         baseUrl,
-        tmdbKey,
-        mdblistKey,
-        simklClientId,
         rawConfig,
         enabledTypes
     };
 }
 
 function buildErdbUrl(config, assetType, erdbId) {
-    if (!config || !erdbId) return null;
+    if (!config || !erdbId || !assetType) return null;
 
-    const rawConfig = config.rawConfig && typeof config.rawConfig === "object"
+    const cfg = config.rawConfig && typeof config.rawConfig === "object"
         ? config.rawConfig
         : {};
-    const normalizedRatings = normalizeErdbProviderParam(rawConfig.ratings, { preserveEmpty: true });
-    const normalizedPosterRatings = normalizeErdbProviderParam(rawConfig.posterRatings, { preserveEmpty: true });
-    const normalizedBackdropRatings = normalizeErdbProviderParam(rawConfig.backdropRatings, { preserveEmpty: true });
-    const normalizedLogoRatings = normalizeErdbProviderParam(rawConfig.logoRatings, { preserveEmpty: true });
-    const query = new URLSearchParams();
-    const setQueryParam = (key, value, options = {}) => {
-        const normalized = normalizeErdbQueryParam(value, options);
-        if (normalized === undefined) return;
-        query.set(key, normalized);
-    };
-    const typeRatingStyle = assetType === "poster"
-        ? normalizeErdbQueryParam(rawConfig.posterRatingStyle)
-        : assetType === "backdrop" || assetType === "thumbnail"
-            ? normalizeErdbQueryParam(rawConfig.backdropRatingStyle)
-            : normalizeErdbQueryParam(rawConfig.logoRatingStyle);
-    const typeImageText = assetType === "poster"
-        ? normalizeErdbQueryParam(rawConfig.posterImageText)
-        : assetType === "backdrop"
-            ? normalizeErdbQueryParam(rawConfig.backdropImageText)
-            : undefined;
-    const hasExplicitThumbnailRatings = hasOwnErdbParam(rawConfig, "thumbnailRatings");
-    const effectiveThumbnailRatings = hasExplicitThumbnailRatings
-        ? normalizeErdbProviderParam(rawConfig.thumbnailRatings, {
-            preserveEmpty: true,
-            allowedProviders: ERDB_THUMBNAIL_RATING_PROVIDERS
-        })
-        : normalizeErdbProviderParam(rawConfig.ratings, {
-            preserveEmpty: true,
-            allowedProviders: ERDB_THUMBNAIL_RATING_PROVIDERS
+
+    const typeRatingStyle = assetType === 'poster' ? cfg.posterRatingStyle : assetType === 'backdrop' ? cfg.backdropRatingStyle : cfg.logoRatingStyle;
+    const typeImageText = assetType === 'backdrop' ? cfg.backdropImageText : cfg.posterImageText;
+
+    const baseUrl = config.baseUrl;
+    const type = assetType;
+    const id = erdbId;
+
+    try {
+        const url = new URL(`${baseUrl}/${type}/${id}.jpg`);
+        url.searchParams.set('tmdbKey', cfg.tmdbKey);
+        url.searchParams.set('mdblistKey', cfg.mdblistKey);
+        if (cfg.simklClientId) url.searchParams.set('simklClientId', cfg.simklClientId);
+        if (cfg.lang) url.searchParams.set('lang', cfg.lang);
+
+        if (typeRatingStyle) url.searchParams.set('ratingStyle', typeRatingStyle);
+        if (type !== 'logo' && type !== 'thumbnail' && typeImageText) url.searchParams.set('imageText', typeImageText);
+
+        const providers = cfg[`${type}Ratings`] || cfg.ratings;
+        if (providers) url.searchParams.set(type === 'thumbnail' ? 'ratings' : `${type}Ratings`, providers);
+
+        Object.keys(cfg).forEach(key => {
+            if (!['erdbBase', 'baseUrl', 'tmdbKey', 'mdblistKey', 'simklClientId', 'lang'].includes(key)) {
+                url.searchParams.set(key, cfg[key]);
+            }
         });
-    const ratingsParam = assetType === "thumbnail"
-        ? effectiveThumbnailRatings
-        : normalizedRatings;
-    const thumbnailRatingsParam = assetType === "thumbnail"
-        ? effectiveThumbnailRatings
-        : (hasExplicitThumbnailRatings
-            ? normalizeErdbProviderParam(rawConfig.thumbnailRatings, {
-                preserveEmpty: true,
-                allowedProviders: ERDB_THUMBNAIL_RATING_PROVIDERS
-            })
-            : undefined);
 
-    setQueryParam("tmdbKey", config.tmdbKey);
-    setQueryParam("mdblistKey", config.mdblistKey);
-    setQueryParam("simklClientId", config.simklClientId);
-    setQueryParam("ratings", ratingsParam, { preserveEmpty: true });
-    setQueryParam("posterRatings", normalizedPosterRatings, { preserveEmpty: true });
-    setQueryParam("backdropRatings", normalizedBackdropRatings, { preserveEmpty: true });
-    setQueryParam("thumbnailRatings", thumbnailRatingsParam, { preserveEmpty: true });
-    setQueryParam("logoRatings", normalizedLogoRatings, { preserveEmpty: true });
-    if (assetType === "logo") {
-        setQueryParam("logoRatingsMax", rawConfig.logoRatingsMax);
+        return url.toString();
+    } catch (e) {
+        console.error("[Easy Catalogs] Error building ERDB URL:", e.message);
+        return null;
     }
-    setQueryParam("lang", rawConfig.lang);
-    setQueryParam("streamBadges", rawConfig.streamBadges);
-    setQueryParam("posterStreamBadges", rawConfig.posterStreamBadges);
-    setQueryParam("backdropStreamBadges", rawConfig.backdropStreamBadges);
-    setQueryParam("qualityBadgesSide", rawConfig.qualityBadgesSide);
-    setQueryParam("posterQualityBadgesPosition", rawConfig.posterQualityBadgesPosition);
-    setQueryParam("qualityBadgesStyle", rawConfig.qualityBadgesStyle);
-    setQueryParam("posterQualityBadgesStyle", rawConfig.posterQualityBadgesStyle);
-    setQueryParam("backdropQualityBadgesStyle", rawConfig.backdropQualityBadgesStyle);
-    setQueryParam("ratingStyle", typeRatingStyle);
-    if (assetType !== "logo" && assetType !== "thumbnail") {
-        setQueryParam("imageText", typeImageText);
-    }
-    setQueryParam("posterRatingsLayout", rawConfig.posterRatingsLayout);
-    setQueryParam("posterRatingsMaxPerSide", rawConfig.posterRatingsMaxPerSide);
-    setQueryParam("backdropRatingsLayout", rawConfig.backdropRatingsLayout);
-    setQueryParam("posterVerticalBadgeContent", rawConfig.posterVerticalBadgeContent);
-    setQueryParam("backdropVerticalBadgeContent", rawConfig.backdropVerticalBadgeContent);
-    setQueryParam("thumbnailVerticalBadgeContent", rawConfig.thumbnailVerticalBadgeContent);
-    if (assetType === "thumbnail") {
-        setQueryParam("thumbnailRatingsLayout", rawConfig.thumbnailRatingsLayout);
-        setQueryParam("thumbnailSize", rawConfig.thumbnailSize);
-    }
-
-    const baseUrl = config.baseUrl.replace(/\/+$/g, "");
-    const queryString = query.toString();
-    return `${baseUrl}/${assetType}/${erdbId}.jpg${queryString ? `?${queryString}` : ""}`;
 }
 
 function getConfiguredAssetUrl(config, assetType, imdbId, tmdbId, mediaIdOverride = null, mediaType = null) {
@@ -1268,11 +1215,21 @@ const KITSU_TTL_SECONDS = {
 
 function getTmdbApiKey(config = null) {
     const resolvedConfig = getRequestConfig(config);
+    
+    // First priority: Try to get it from erdbConfig
+    const erdbCfg = getErdbConfig(resolvedConfig);
+    if (erdbCfg && erdbCfg.rawConfig && erdbCfg.rawConfig.tmdbKey) {
+        const key = String(erdbCfg.rawConfig.tmdbKey).trim();
+        if (/^[a-f0-9]{32}$/i.test(key)) return key;
+    }
+
+    // Second priority: (Legacy/Manual) tmdbApiKey from config
     const customKey = typeof resolvedConfig.tmdbApiKey === "string"
         ? resolvedConfig.tmdbApiKey.trim()
         : "";
-    const isValidFormat = /^[a-f0-9]{32}$/i.test(customKey);
-    return (isValidFormat ? customKey : "") || DEFAULT_TMDB_API_KEY;
+    if (/^[a-f0-9]{32}$/i.test(customKey)) return customKey;
+
+    return DEFAULT_TMDB_API_KEY;
 }
 
 function extractNumericId(value) {
