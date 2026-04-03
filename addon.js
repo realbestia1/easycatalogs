@@ -692,11 +692,11 @@ function resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride = null, mediaType = 
 
 function getErdbConfig(config = null) {
     const resolvedConfig = getRequestConfig(config);
-    const erdbToken = resolvedConfig && typeof resolvedConfig.erdbToken === "string"
-        ? resolvedConfig.erdbToken.trim()
+    const encodedConfig = resolvedConfig && typeof resolvedConfig.erdbConfig === "string"
+        ? resolvedConfig.erdbConfig.trim()
         : "";
-
-    if (!erdbToken) return null;
+    const cfg = decodeErdbConfig(encodedConfig);
+    if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return null;
 
     const enabledTypesRaw = resolvedConfig && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
@@ -709,7 +709,7 @@ function getErdbConfig(config = null) {
     };
 
     return {
-        erdbToken,
+        cfg,
         enabledTypes
     };
 }
@@ -717,13 +717,49 @@ function getErdbConfig(config = null) {
 function buildErdbUrl(config, assetType, erdbId) {
     if (!config || !erdbId || !assetType) return null;
 
-    const { erdbToken } = config;
+    const { cfg } = config;
     const type = assetType;
     const id = erdbId;
+    const erdbBase = cfg.erdbBase || cfg.baseUrl;
 
-    if (!erdbToken) return null;
+    if (!erdbBase) return null;
 
-    return `https://easyratingsdb.com/${erdbToken}/${type}/${id}.jpg`;
+    const typeRatingStyle = type === 'poster' ? cfg.posterRatingStyle : type === 'backdrop' ? cfg.backdropRatingStyle : type === 'thumbnail' ? cfg.thumbnailRatingStyle : cfg.logoRatingStyle;
+    const typeImageText = type === 'backdrop' ? cfg.backdropImageText : cfg.posterImageText;
+
+    try {
+        const url = new URL(`${erdbBase}/${type}/${id}.jpg`);
+
+        // Apply all config fields as query params first
+        Object.keys(cfg).forEach(key => {
+            if (!['erdbBase', 'baseUrl', 'tmdbKey', 'mdblistKey', 'simklClientId', 'lang'].includes(key)) {
+                url.searchParams.set(key, cfg[key]);
+            }
+        });
+
+        // Apply shared mandatory params (ensure they use the right keys)
+        url.searchParams.set('tmdbKey', cfg.tmdbKey);
+        url.searchParams.set('mdblistKey', cfg.mdblistKey);
+        if (cfg.simklClientId) url.searchParams.set('simklClientId', cfg.simklClientId);
+        if (cfg.lang) url.searchParams.set('lang', cfg.lang);
+
+        // Apply type-specific overrides (these take precedence over global ratingStyle/imageText set in the loop above)
+        if (typeRatingStyle) url.searchParams.set('ratingStyle', typeRatingStyle);
+
+        if (type !== 'logo' && type !== 'thumbnail') {
+            if (typeImageText) url.searchParams.set('imageText', typeImageText);
+        } else {
+            url.searchParams.delete('imageText'); // Explicitly omit for logo/thumbnail
+        }
+
+        const providers = cfg[`${type}Ratings`] || cfg.ratings;
+        if (providers) url.searchParams.set(type === 'thumbnail' ? 'ratings' : `${type}Ratings`, providers);
+
+        return url.toString();
+    } catch (e) {
+        console.error("[Easy Catalogs] Error building ERDB URL:", e.message);
+        return null;
+    }
 }
 
 function getConfiguredAssetUrl(config, assetType, imdbId, tmdbId, mediaIdOverride = null, mediaType = null) {
