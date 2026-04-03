@@ -1803,14 +1803,13 @@
                                 </div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
-                                <label for="erdbConfig">ERDB Configurator String</label>
-                                <input type="text" id="erdbConfig" placeholder="Pasticca qui la stringa configurata...">
+                                <label for="erdbToken">ERDB Token</label>
+                                <input type="text" id="erdbToken" placeholder="Incolla qui il token Tk-...">
                                 <div class="input-hint">
-                                    Incolla la stringa base64url generata dal sito ERDB Configurator.
-                                    Questa stringa contiene gia le tue chiavi API (TMDB, MDBlist, ecc.) e le tue
-                                    preferenze.
-                                    <a href="https://easyratingsdb.com" target="_blank" rel="noopener">Vai all'ERDB
-                                        Configurator</a>
+                                    Incolla il token ERDB generato dal configuratore dopo il login. Le chiavi API,
+                                    i layout, i provider e le preferenze artwork restano salvati lato server dietro al
+                                    token.
+                                    <a href="https://easyratingsdb.com" target="_blank" rel="noopener">Apri ERDB</a>
                                 </div>
                             </div>
                             <div class="input-group" id="erdbTypeToggles" style="display: none;">
@@ -2263,9 +2262,15 @@
         }
         function applyErdbConfigFields(resolvedConfig) {
             const config = resolvedConfig && typeof resolvedConfig === 'object' ? resolvedConfig : {};
-            const erdbConfigValue = typeof config.erdbConfig === 'string' ? config.erdbConfig.trim() : '';
-            const erdbConfigInput = document.getElementById('erdbConfig');
-            if (erdbConfigInput) erdbConfigInput.value = erdbConfigValue;
+            const erdbTokenValue = typeof config.erdbToken === 'string'
+                ? config.erdbToken.trim()
+                : '';
+            const legacyErdbConfigValue = typeof config.erdbConfig === 'string'
+                ? config.erdbConfig.trim()
+                : '';
+            const erdbTokenInput = document.getElementById('erdbToken');
+            if (erdbTokenInput) erdbTokenInput.value = erdbTokenValue;
+            document.body.dataset.legacyErdbConfig = legacyErdbConfigValue;
 
             const enabledTypes = config.erdbTypes && typeof config.erdbTypes === 'object' ? config.erdbTypes : {};
             const posterToggle = document.getElementById('erdbEnablePoster');
@@ -2280,10 +2285,10 @@
         }
 
         function updateErdbToggleVisibility() {
-            const erdbConfigInput = document.getElementById('erdbConfig');
+            const erdbTokenInput = document.getElementById('erdbToken');
             const toggles = document.getElementById('erdbTypeToggles');
-            if (!erdbConfigInput || !toggles) return;
-            const hasValue = !!erdbConfigInput.value.trim();
+            if (!erdbTokenInput || !toggles) return;
+            const hasValue = !!erdbTokenInput.value.trim() || !!document.body.dataset.legacyErdbConfig;
             toggles.style.display = hasValue ? '' : 'none';
         }
 
@@ -3479,9 +3484,14 @@
             if (tmdbApiKey) config.tmdbApiKey = tmdbApiKey;
             if (!returnStreams) config.returnStreams = false;
 
-            const erdbConfigValue = document.getElementById("erdbConfig").value.trim();
-            if (erdbConfigValue) {
-                config.erdbConfig = erdbConfigValue;
+            const erdbTokenValue = document.getElementById("erdbToken").value.trim();
+            const legacyErdbConfigValue = document.body.dataset.legacyErdbConfig || "";
+            if (erdbTokenValue || legacyErdbConfigValue) {
+                if (erdbTokenValue) {
+                    config.erdbToken = erdbTokenValue;
+                } else if (legacyErdbConfigValue) {
+                    config.erdbConfig = legacyErdbConfigValue;
+                }
                 const erdbTypes = {};
                 if (!document.getElementById("erdbEnablePoster").checked) erdbTypes.poster = false;
                 if (!document.getElementById("erdbEnableBackdrop").checked) erdbTypes.backdrop = false;
@@ -3620,9 +3630,9 @@
             setCatalogsLandscapeForSection(getActiveCatalogPage(), false);
         });
 
-        const erdbConfigInput = document.getElementById("erdbConfig");
-        if (erdbConfigInput) {
-            erdbConfigInput.addEventListener("input", updateErdbToggleVisibility);
+        const erdbTokenInput = document.getElementById("erdbToken");
+        if (erdbTokenInput) {
+            erdbTokenInput.addEventListener("input", updateErdbToggleVisibility);
         }
 
         applyInitialConfiguration(decodeConfigFromPath());

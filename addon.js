@@ -546,6 +546,12 @@ function decodeErdbConfig(value) {
     }
 }
 
+function normalizeErdbToken(value) {
+    if (typeof value !== "string") return "";
+    const trimmed = value.trim();
+    return /^Tk-[A-Za-z0-9._~-]+$/.test(trimmed) ? trimmed : "";
+}
+
 function normalizeErdbQueryParam(value, options = {}) {
     const preserveEmpty = options && options.preserveEmpty === true;
     if (value === undefined || value === null) return undefined;
@@ -692,11 +698,13 @@ function resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride = null, mediaType = 
 
 function getErdbConfig(config = null) {
     const resolvedConfig = getRequestConfig(config);
+    const erdbToken = normalizeErdbToken(resolvedConfig && resolvedConfig.erdbToken);
     const encodedConfig = resolvedConfig && typeof resolvedConfig.erdbConfig === "string"
         ? resolvedConfig.erdbConfig.trim()
         : "";
     const cfg = decodeErdbConfig(encodedConfig);
-    if (!cfg || typeof cfg !== "object" || Array.isArray(cfg)) return null;
+    const hasLegacyConfig = !!(cfg && typeof cfg === "object" && !Array.isArray(cfg));
+    if (!erdbToken && !hasLegacyConfig) return null;
 
     const enabledTypesRaw = resolvedConfig && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
@@ -709,7 +717,9 @@ function getErdbConfig(config = null) {
     };
 
     return {
-        cfg,
+        cfg: hasLegacyConfig ? cfg : null,
+        rawConfig: hasLegacyConfig ? cfg : null,
+        erdbToken,
         enabledTypes
     };
 }
@@ -717,12 +727,18 @@ function getErdbConfig(config = null) {
 function buildErdbUrl(config, assetType, erdbId) {
     if (!config || !erdbId || !assetType) return null;
 
-    const { cfg } = config;
     const type = assetType;
     const id = erdbId;
-    const erdbBase = cfg.erdbBase || cfg.baseUrl;
+    const erdbToken = normalizeErdbToken(config.erdbToken);
 
-    if (!erdbBase) return null;
+    if (erdbToken) {
+        return `https://easyratingsdb.com/${erdbToken}/${type}/${id}.jpg`;
+    }
+
+    const { cfg } = config;
+    const erdbBase = cfg && (cfg.erdbBase || cfg.baseUrl);
+
+    if (!cfg || !erdbBase) return null;
 
     const typeRatingStyle = type === 'poster' ? cfg.posterRatingStyle : type === 'backdrop' ? cfg.backdropRatingStyle : type === 'thumbnail' ? cfg.thumbnailRatingStyle : cfg.logoRatingStyle;
     const typeImageText = type === 'backdrop' ? cfg.backdropImageText : cfg.posterImageText;
@@ -4557,6 +4573,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
     const erdbConfigKey = typeof resolvedConfig.erdbConfig === "string"
         ? resolvedConfig.erdbConfig.trim()
         : "";
+    const erdbTokenKey = normalizeErdbToken(resolvedConfig && resolvedConfig.erdbToken);
     const erdbTypesKey = resolvedConfig.erdbTypes && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
         : {};
@@ -4567,6 +4584,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
         allowedSubtypes: allowedSubtypes.join(","),
         excludeFutureStartDates,
         tmdbApiKey: resolvedConfig.tmdbApiKey || "",
+        erdbToken: erdbTokenKey,
         erdbConfig: erdbConfigKey,
         erdbTypes: erdbTypesKey
     })}`;
