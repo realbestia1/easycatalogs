@@ -4468,7 +4468,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
     const search = typeof extra.search === "string" ? extra.search.trim() : "";
     const discover = typeof extra.discover === "string" ? extra.discover.trim() : "";
     const isDiscoverRequest = isDiscoverCatalogRequest(extra);
-    const pageLimit = isDiscoverRequest ? 100 : 20;
+    const pageLimit = 20;
     const isSearchCatalog = normalizedCatalogId === "kitsu.series.search" ||
         normalizedCatalogId === "kitsu.movie.search" ||
         normalizedCatalogId === "kitsu.series.ova_search" ||
@@ -4743,7 +4743,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
         const metas = (await mapWithConcurrency(
             filteredData,
             isDiscoverRequest ? 2 : 3,
-            item => mapKitsuCatalogItemToMeta(item, forcedType, config, { enrichCatalogMeta: true })
+            item => mapKitsuCatalogItemToMeta(item, forcedType, config, { enrichCatalogMeta: !isDiscoverRequest })
         ))
             .filter(Boolean);
 
