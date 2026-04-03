@@ -382,8 +382,12 @@ function createDiscoverOnlyCatalog(catalog) {
     if (!catalog) return catalog;
 
     const extra = Array.isArray(catalog.extra) ? [...catalog.extra] : [];
+    const hasMeaningfulExtra = extra.some(entry => {
+        const name = entry && typeof entry.name === "string" ? entry.name.trim().toLowerCase() : "";
+        return name && name !== "skip" && name !== "discover";
+    });
     const hasDiscoverExtra = extra.some(entry => entry && entry.name === "discover");
-    if (!hasDiscoverExtra) {
+    if (!hasMeaningfulExtra && !hasDiscoverExtra) {
         extra.push({ name: "discover", isRequired: true, options: ["only", "Only"] });
     }
 
