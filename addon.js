@@ -478,11 +478,21 @@ const ERDB_STREAM_BADGES = new Set(["auto", "on", "off"]);
 const ERDB_QUALITY_BADGE_SIDES = new Set(["left", "right"]);
 const ERDB_THUMBNAIL_RATING_PROVIDERS = new Set(["tmdb", "imdb"]);
 
-function normalizeErdbBaseUrl(value) {
-    if (typeof value !== "string") return "";
-    const trimmed = value.trim();
+function normalizeErdbBaseUrl(value, fallback = "https://easyratingsdb.com") {
+    const rawValue = typeof value === "string" && value.trim()
+        ? value.trim()
+        : fallback;
+    if (typeof rawValue !== "string" || !rawValue.trim()) return "";
+
+    const trimmed = rawValue.trim().replace(/\/+$/, "");
     if (!trimmed) return "";
-    return trimmed.replace(/\/+$/g, "");
+
+    try {
+        const url = new URL(trimmed);
+        return url.toString().replace(/\/+$/, "");
+    } catch (err) {
+        return "";
+    }
 }
 
 function normalizeErdbRatings(rawRatings) {
@@ -718,6 +728,7 @@ function resolveErdbMediaId(imdbId, tmdbId, mediaIdOverride = null, mediaType = 
 function getErdbConfig(config = null) {
     const resolvedConfig = getRequestConfig(config);
     const erdbToken = normalizeErdbToken(resolvedConfig && resolvedConfig.erdbToken);
+    const erdbBaseUrl = normalizeErdbBaseUrl(resolvedConfig && resolvedConfig.erdbBaseUrl);
     const encodedConfig = resolvedConfig && typeof resolvedConfig.erdbConfig === "string"
         ? resolvedConfig.erdbConfig.trim()
         : "";
@@ -739,6 +750,7 @@ function getErdbConfig(config = null) {
         cfg: hasLegacyConfig ? cfg : null,
         rawConfig: hasLegacyConfig ? cfg : null,
         erdbToken,
+        erdbBaseUrl,
         enabledTypes
     };
 }
@@ -749,13 +761,15 @@ function buildErdbUrl(config, assetType, erdbId) {
     const type = assetType;
     const id = erdbId;
     const erdbToken = normalizeErdbToken(config.erdbToken);
+    const erdbBaseUrl = normalizeErdbBaseUrl(config.erdbBaseUrl);
 
     if (erdbToken) {
-        return `https://easyratingsdb.com/${erdbToken}/${type}/${id}.jpg`;
+        if (!erdbBaseUrl) return null;
+        return `${erdbBaseUrl}/${erdbToken}/${type}/${id}.jpg`;
     }
 
     const { cfg } = config;
-    const erdbBase = cfg && (cfg.erdbBase || cfg.baseUrl);
+    const erdbBase = normalizeErdbBaseUrl(cfg && (cfg.erdbBase || cfg.baseUrl), "");
 
     if (!cfg || !erdbBase) return null;
 

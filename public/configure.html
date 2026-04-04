@@ -1812,6 +1812,14 @@
                                     <a href="https://easyratingsdb.com" target="_blank" rel="noopener">Apri ERDB</a>
                                 </div>
                             </div>
+                            <div class="input-group" id="erdbBaseUrlGroup" style="margin-top: 1rem; display: none;">
+                                <label for="erdbBaseUrl">ERDB Base URL (opzionale)</label>
+                                <input type="text" id="erdbBaseUrl" placeholder="https://easyratingsdb.com">
+                                <div class="input-hint">
+                                    Lascia il valore predefinito oppure imposta un'istanza ERDB self-hosted. Lo slash
+                                    finale viene normalizzato automaticamente.
+                                </div>
+                            </div>
                             <div class="input-group" id="erdbTypeToggles" style="display: none;">
                                 <label>ERDB Artwork</label>
                                 <div class="feature-toggle-row">
@@ -2260,16 +2268,37 @@
                 return {};
             }
         }
+        const DEFAULT_ERDB_BASE_URL = 'https://easyratingsdb.com';
+
+        function normalizeErdbBaseUrl(value, fallback = DEFAULT_ERDB_BASE_URL) {
+            const rawValue = typeof value === 'string' && value.trim()
+                ? value.trim()
+                : fallback;
+            if (!rawValue) return '';
+
+            const trimmed = rawValue.replace(/\/+$/, '');
+            try {
+                return new URL(trimmed).toString().replace(/\/+$/, '');
+            } catch (err) {
+                return fallback ? fallback.replace(/\/+$/, '') : '';
+            }
+        }
+
         function applyErdbConfigFields(resolvedConfig) {
             const config = resolvedConfig && typeof resolvedConfig === 'object' ? resolvedConfig : {};
             const erdbTokenValue = typeof config.erdbToken === 'string'
                 ? config.erdbToken.trim()
                 : '';
+            const erdbBaseUrlValue = normalizeErdbBaseUrl(
+                typeof config.erdbBaseUrl === 'string' ? config.erdbBaseUrl : ''
+            );
             const legacyErdbConfigValue = typeof config.erdbConfig === 'string'
                 ? config.erdbConfig.trim()
                 : '';
             const erdbTokenInput = document.getElementById('erdbToken');
+            const erdbBaseUrlInput = document.getElementById('erdbBaseUrl');
             if (erdbTokenInput) erdbTokenInput.value = erdbTokenValue;
+            if (erdbBaseUrlInput) erdbBaseUrlInput.value = erdbBaseUrlValue;
             document.body.dataset.legacyErdbConfig = legacyErdbConfigValue;
 
             const enabledTypes = config.erdbTypes && typeof config.erdbTypes === 'object' ? config.erdbTypes : {};
@@ -2287,8 +2316,10 @@
         function updateErdbToggleVisibility() {
             const erdbTokenInput = document.getElementById('erdbToken');
             const toggles = document.getElementById('erdbTypeToggles');
-            if (!erdbTokenInput || !toggles) return;
+            const erdbBaseUrlGroup = document.getElementById('erdbBaseUrlGroup');
+            if (!erdbTokenInput || !toggles || !erdbBaseUrlGroup) return;
             const hasValue = !!erdbTokenInput.value.trim() || !!document.body.dataset.legacyErdbConfig;
+            erdbBaseUrlGroup.style.display = hasValue ? '' : 'none';
             toggles.style.display = hasValue ? '' : 'none';
         }
 
@@ -3485,10 +3516,14 @@
             if (!returnStreams) config.returnStreams = false;
 
             const erdbTokenValue = document.getElementById("erdbToken").value.trim();
+            const erdbBaseUrlValue = normalizeErdbBaseUrl(document.getElementById("erdbBaseUrl").value.trim());
             const legacyErdbConfigValue = document.body.dataset.legacyErdbConfig || "";
             if (erdbTokenValue || legacyErdbConfigValue) {
                 if (erdbTokenValue) {
                     config.erdbToken = erdbTokenValue;
+                    if (erdbBaseUrlValue && erdbBaseUrlValue !== DEFAULT_ERDB_BASE_URL) {
+                        config.erdbBaseUrl = erdbBaseUrlValue;
+                    }
                 } else if (legacyErdbConfigValue) {
                     config.erdbConfig = legacyErdbConfigValue;
                 }
