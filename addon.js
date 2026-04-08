@@ -134,20 +134,6 @@ function getOrderedSeriesVideos(videos) {
         .sort(compareVideosByRelease);
 }
 
-function getDefaultSeriesVideoId(videos) {
-    const orderedVideos = getOrderedSeriesVideos(videos);
-    if (orderedVideos.length === 0) return null;
-
-    const now = Date.now();
-    const releasedVideos = orderedVideos.filter(video => {
-        const releasedAt = parseVideoReleaseTimestamp(video);
-        return releasedAt !== null && releasedAt <= now;
-    });
-
-    const selectedVideo = releasedVideos.length > 0 ? releasedVideos[0] : orderedVideos[0];
-    return selectedVideo && typeof selectedVideo.id === "string" ? selectedVideo.id : null;
-}
-
 function isStandardEpisodeVideo(video) {
     const seasonNumber = Number.parseInt(String(video && video.season || ""), 10);
     return !Number.isFinite(seasonNumber) || seasonNumber > 0;
@@ -4693,12 +4679,7 @@ async function buildKitsuMetaForPayload(kitsuId, payload, requestedType, config 
             }
         }
 
-        const defaultSeriesVideoId = getDefaultSeriesVideoId(meta.videos);
-        if (defaultSeriesVideoId) {
-            meta.behaviorHints.defaultVideoId = defaultSeriesVideoId;
-        } else {
-            delete meta.behaviorHints.defaultVideoId;
-        }
+        delete meta.behaviorHints.defaultVideoId;
         meta.behaviorHints.hasScheduledVideos = true;
     } else {
         meta.behaviorHints.defaultVideoId = `kitsu:${normalizedKitsuId}`;
@@ -5873,9 +5854,7 @@ async function transformToMeta(item, type, config = null, options = {}) {
         trailers: trailers,
         trailerStreams: trailerStreams,
         behaviorHints: {
-            defaultVideoId: isMovie
-                ? (item.imdb_id || `tmdb:${item.id}`)
-                : getDefaultSeriesVideoId(videos),
+            defaultVideoId: isMovie ? (item.imdb_id || `tmdb:${item.id}`) : null,
             hasScheduledVideos: !isMovie
         },
         videos: videos
