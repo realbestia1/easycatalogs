@@ -134,6 +134,20 @@ function getOrderedSeriesVideos(videos) {
         .sort(compareVideosByRelease);
 }
 
+function getDefaultSeriesVideoId(videos) {
+    const orderedVideos = getOrderedSeriesVideos(videos);
+    if (orderedVideos.length === 0) return null;
+
+    const now = Date.now();
+    const releasedVideos = orderedVideos.filter(video => {
+        const releasedAt = parseVideoReleaseTimestamp(video);
+        return releasedAt !== null && releasedAt <= now;
+    });
+
+    const selectedVideo = releasedVideos.length > 0 ? releasedVideos[0] : orderedVideos[0];
+    return selectedVideo && typeof selectedVideo.id === "string" ? selectedVideo.id : null;
+}
+
 function isStandardEpisodeVideo(video) {
     const seasonNumber = Number.parseInt(String(video && video.season || ""), 10);
     return !Number.isFinite(seasonNumber) || seasonNumber > 0;
@@ -293,9 +307,242 @@ function getEasyStreamsStreamUrl(type, id, config = null) {
     return `${getEasyStreamsBaseUrl(config)}/stream/${encodedType}/${encodedId}.json`;
 }
 
+function normalizeAddonManifestUrl(value) {
+    if (typeof value !== "string") return "";
+
+    let trimmedValue = value.trim();
+    if (!trimmedValue) return "";
+
+    if (/^stremio:\/\//i.test(trimmedValue)) {
+        trimmedValue = trimmedValue.replace(/^stremio:\/\//i, "https://");
+    }
+
+    try {
+        const parsedUrl = new URL(trimmedValue);
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+            return "";
+        }
+        return parsedUrl.toString().replace(/\/+$/, "");
+    } catch (error) {
+        return "";
+    }
+}
+
+function getCustomStreamAddonManifestUrls(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const rawValue = resolvedConfig.customStreamAddons;
+    const values = Array.isArray(rawValue)
+        ? rawValue
+        : (typeof rawValue === "string" ? rawValue.split(/\r?\n|,/) : []);
+
+    return [...new Set(values
+        .map(normalizeAddonManifestUrl)
+        .filter(Boolean))];
+}
+
+function getCustomCatalogAddonManifestUrls(config = null) {
+    const resolvedConfig = getRequestConfig(config);
+    const rawValue = resolvedConfig.customCatalogAddons;
+    const values = Array.isArray(rawValue)
+        ? rawValue
+        : (typeof rawValue === "string" ? rawValue.split(/\r?\n|,/) : []);
+
+    return [...new Set(values
+        .map(normalizeAddonManifestUrl)
+        .filter(Boolean))];
+}
+
+function encodeExternalCatalogIdParts(parts = []) {
+    return parts.map(part => Buffer.from(String(part || ""), "utf-8").toString("base64url")).join(".");
+}
+
+function decodeExternalCatalogIdParts(value) {
+    try {
+        return String(value || "")
+            .split(".")
+            .map(part => Buffer.from(part, "base64url").toString("utf-8"));
+    } catch (error) {
+        return [];
+    }
+}
+
+function buildCustomCatalogProxyId(manifestUrl, catalog) {
+    if (!catalog || typeof catalog !== "object") return "";
+    return `extcat.${encodeExternalCatalogIdParts([
+        manifestUrl,
+        catalog.type || "",
+        catalog.id || ""
+    ])}`;
+}
+
+function parseCustomCatalogProxyId(proxyId) {
+    const rawValue = String(proxyId || "").trim();
+    if (!rawValue.startsWith("extcat.")) return null;
+
+    const [manifestUrl, type, catalogId] = decodeExternalCatalogIdParts(rawValue.slice("extcat.".length));
+    const normalizedManifestUrl = normalizeAddonManifestUrl(manifestUrl);
+    if (!normalizedManifestUrl || !type || !catalogId) return null;
+
+    return { manifestUrl: normalizedManifestUrl, type, catalogId };
+}
+
+function getAddonBaseUrl(manifestUrl) {
+    const normalizedManifestUrl = normalizeAddonManifestUrl(manifestUrl);
+    if (!normalizedManifestUrl) return "";
+    return normalizedManifestUrl.endsWith("/manifest.json")
+        ? normalizedManifestUrl.slice(0, -"/manifest.json".length)
+        : normalizedManifestUrl;
+}
+
+async function fetchAddonManifest(manifestUrl) {
+    const normalizedManifestUrl = normalizeAddonManifestUrl(manifestUrl);
+    if (!normalizedManifestUrl) return null;
+
+    try {
+        const response = await fetch(normalizedManifestUrl, {
+            headers: { Accept: "application/json" }
+        });
+        if (!response.ok) return null;
+
+        const manifest = await response.json();
+        return manifest && typeof manifest === "object" ? manifest : null;
+    } catch (error) {
+        console.warn(`[Easy Catalogs] Custom addon manifest fetch failed for ${normalizedManifestUrl}: ${error.message}`);
+        return null;
+    }
+}
+
+async function getCustomCatalogProxyCatalogs(config = null) {
+    const manifestUrls = getCustomCatalogAddonManifestUrls(config);
+    if (manifestUrls.length === 0) return [];
+
+    const manifests = await Promise.all(
+        manifestUrls.map(async manifestUrl => ({
+            manifestUrl,
+            manifest: await fetchAddonManifest(manifestUrl)
+        }))
+    );
+
+    return manifests.flatMap(({ manifestUrl, manifest }, index) => {
+        const catalogs = Array.isArray(manifest && manifest.catalogs) ? manifest.catalogs : [];
+        const addonName = String(manifest && manifest.name || `Addon ${index + 1}`).trim();
+
+        return catalogs
+            .filter(catalog => catalog && typeof catalog === "object" && catalog.id && catalog.type)
+            .map(catalog => ({
+                ...catalog,
+                id: buildCustomCatalogProxyId(manifestUrl, catalog),
+                name: `${catalog.name || catalog.id} · ${addonName}`,
+                behaviorHints: {
+                    ...(catalog.behaviorHints && typeof catalog.behaviorHints === "object" ? catalog.behaviorHints : {}),
+                    configurable: false
+                }
+            }));
+    });
+}
+
+function buildExternalCatalogUrl(manifestUrl, type, catalogId, extra = {}) {
+    const baseUrl = getAddonBaseUrl(manifestUrl);
+    if (!baseUrl) return "";
+
+    const params = new URLSearchParams();
+    Object.entries(extra && typeof extra === "object" ? extra : {}).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        params.set(key, String(value));
+    });
+
+    const query = params.toString();
+    const encodedType = encodeURIComponent(String(type || "").trim());
+    const encodedCatalogId = encodeURIComponent(String(catalogId || "").trim());
+    return `${baseUrl}/catalog/${encodedType}/${encodedCatalogId}.json${query ? `?${query}` : ""}`;
+}
+
+function getCustomStreamAddonUrl(manifestUrl, type, id) {
+    const normalizedManifestUrl = normalizeAddonManifestUrl(manifestUrl);
+    if (!normalizedManifestUrl) return "";
+
+    const encodedType = encodeURIComponent(String(type || "").trim());
+    const encodedId = encodeURIComponent(String(id || "").trim()).replace(/%3A/gi, ":");
+    if (normalizedManifestUrl.endsWith("/manifest.json")) {
+        return `${normalizedManifestUrl.slice(0, -"/manifest.json".length)}/stream/${encodedType}/${encodedId}.json`;
+    }
+
+    return `${normalizedManifestUrl}/stream/${encodedType}/${encodedId}.json`;
+}
+
+function getStreamDedupeKey(stream) {
+    if (!stream || typeof stream !== "object") return "";
+
+    return JSON.stringify({
+        url: typeof stream.url === "string" ? stream.url : "",
+        externalUrl: typeof stream.externalUrl === "string" ? stream.externalUrl : "",
+        ytId: typeof stream.ytId === "string" ? stream.ytId : "",
+        infoHash: typeof stream.infoHash === "string" ? stream.infoHash : "",
+        fileIdx: stream.fileIdx ?? null,
+        name: typeof stream.name === "string" ? stream.name : "",
+        title: typeof stream.title === "string" ? stream.title : ""
+    });
+}
+
+async function fetchStreamsFromUrl(url) {
+    if (!url) return [];
+
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    Accept: "application/json"
+                },
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                return [];
+            }
+
+            const payload = await response.json();
+            return Array.isArray(payload && payload.streams) ? payload.streams : [];
+        } finally {
+            clearTimeout(timeout);
+        }
+    } catch (error) {
+        return [];
+    }
+}
+
+async function fetchAggregatedStreams(type, id, config = null) {
+    const streamUrls = [
+        getEasyStreamsStreamUrl(type, id, config),
+        ...getCustomStreamAddonManifestUrls(config).map(manifestUrl => getCustomStreamAddonUrl(manifestUrl, type, id))
+    ].filter(Boolean);
+
+    if (streamUrls.length === 0) {
+        return [];
+    }
+
+    const responses = await Promise.all(streamUrls.map(fetchStreamsFromUrl));
+    const seen = new Set();
+
+    return responses
+        .flat()
+        .filter(stream => stream && typeof stream === "object")
+        .filter(stream => {
+            const key = getStreamDedupeKey(stream);
+            if (!key || seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+}
+
 function normalizeConfiguredCatalogEntryKey(key) {
     const rawKey = String(key || "").trim();
     if (!rawKey) return "";
+    if (rawKey.startsWith("extcat.")) return rawKey;
 
     const legacyMap = {
         [TOP10_MOVIE_CONFIG_ID]: TOP10_GLOBAL_CATALOG_ID,
@@ -4427,7 +4674,12 @@ async function buildKitsuMetaForPayload(kitsuId, payload, requestedType, config 
             }
         }
 
-        delete meta.behaviorHints.defaultVideoId;
+        const defaultSeriesVideoId = getDefaultSeriesVideoId(meta.videos);
+        if (defaultSeriesVideoId) {
+            meta.behaviorHints.defaultVideoId = defaultSeriesVideoId;
+        } else {
+            delete meta.behaviorHints.defaultVideoId;
+        }
         meta.behaviorHints.hasScheduledVideos = true;
     } else {
         meta.behaviorHints.defaultVideoId = `kitsu:${normalizedKitsuId}`;
@@ -5296,18 +5548,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
     }
 
     try {
-        const response = await fetch(getEasyStreamsStreamUrl(type, normalizedId, config), {
-            headers: {
-                Accept: "application/json"
-            }
-        });
-
-        if (!response.ok) {
-            return { streams: [] };
-        }
-
-        const payload = await response.json();
-        const streams = Array.isArray(payload && payload.streams) ? payload.streams : [];
+        const streams = await fetchAggregatedStreams(type, normalizedId, config);
         return { streams };
     } catch (error) {
         console.error(`[Easy Catalogs] Stream Bridge Error: ${error.message}`);
@@ -5613,7 +5854,9 @@ async function transformToMeta(item, type, config = null, options = {}) {
         trailers: trailers,
         trailerStreams: trailerStreams,
         behaviorHints: {
-            defaultVideoId: isMovie ? (item.imdb_id || `tmdb:${item.id}`) : null,
+            defaultVideoId: isMovie
+                ? (item.imdb_id || `tmdb:${item.id}`)
+                : getDefaultSeriesVideoId(videos),
             hasScheduledVideos: !isMovie
         },
         videos: videos
@@ -5638,6 +5881,29 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     const landscapeForCatalog = shouldLandscapeCatalog(sourceCatalogId, catalogShapes);
 
     try {
+        const customCatalogProxy = parseCustomCatalogProxyId(sourceCatalogId);
+        if (customCatalogProxy) {
+            const externalCatalogUrl = buildExternalCatalogUrl(
+                customCatalogProxy.manifestUrl,
+                customCatalogProxy.type,
+                customCatalogProxy.catalogId,
+                resolvedExtra
+            );
+            if (!externalCatalogUrl) {
+                return { metas: [] };
+            }
+
+            const response = await fetch(externalCatalogUrl, {
+                headers: { Accept: "application/json" }
+            });
+            if (!response.ok) {
+                return { metas: [] };
+            }
+
+            const payload = await response.json();
+            return { metas: Array.isArray(payload && payload.metas) ? payload.metas : [] };
+        }
+
         if (isKitsuCatalogId(sourceCatalogId)) {
             const metas = await fetchKitsuCatalogMetas(sourceCatalogId, type, resolvedExtra, config);
             return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
@@ -6137,7 +6403,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'configure.html'));
 });
 
-app.get('/manifest.json', (req, res) => {
+app.get('/manifest.json', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Access-Control-Allow-Methods', '*');
@@ -6147,8 +6413,10 @@ app.get('/manifest.json', (req, res) => {
     const customCatalogShapes = getConfiguredCatalogShapes(config);
 
     let filteredCatalogs = [];
+    const customProxyCatalogs = await getCustomCatalogProxyCatalogs(config);
 
     if (config.catalogs) {
+        const customProxyCatalogMap = new Map(customProxyCatalogs.map(catalog => [catalog.id, catalog]));
         const allowedKeys = [...new Set(
             config.catalogs
                 .split(',')
@@ -6256,6 +6524,8 @@ app.get('/manifest.json', (req, res) => {
                         filteredCatalogs.push(resolvedCatalog);
                     }
                 }
+            } else if (customProxyCatalogMap.has(lookupKey)) {
+                filteredCatalogs.push(customProxyCatalogMap.get(lookupKey));
             } else {
                 // Check for Streaming Catalogs
                 const matching = fullCatalogs.filter(c => {
@@ -6312,6 +6582,10 @@ app.get('/manifest.json', (req, res) => {
 
             return Number(isSearchCatalog(a)) - Number(isSearchCatalog(b));
         });
+    }
+
+    if (!config.catalogs) {
+        filteredCatalogs.push(...customProxyCatalogs);
     }
 
     const manifest = { ...addonInterface.manifest };

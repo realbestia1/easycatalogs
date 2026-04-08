@@ -819,6 +819,32 @@
             overflow-y: auto;
         }
 
+        .setup-step[data-step="integrations"] .settings-panel {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(139, 92, 246, 0.5) rgba(255, 255, 255, 0.04);
+        }
+
+        .setup-step[data-step="integrations"] .settings-panel::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .setup-step[data-step="integrations"] .settings-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 999px;
+            margin: 10px 0;
+        }
+
+        .setup-step[data-step="integrations"] .settings-panel::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(139, 92, 246, 0.7), rgba(59, 130, 246, 0.55));
+            border-radius: 999px;
+            border: 2px solid rgba(15, 15, 20, 0.18);
+            background-clip: padding-box;
+        }
+
+        .setup-step[data-step="integrations"] .settings-panel::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(139, 92, 246, 0.9), rgba(59, 130, 246, 0.72));
+        }
+
         .panel-section {
             margin-bottom: 2rem;
         }
@@ -841,6 +867,59 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+        }
+
+        .addon-stream-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .addon-stream-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.6rem;
+            align-items: center;
+        }
+
+        .addon-stream-actions {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .addon-stream-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.95rem 1rem;
+            border-radius: 0.9rem;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .addon-stream-summary-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            min-width: 0;
+        }
+
+        .addon-stream-summary-title {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .addon-stream-summary-text {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.35;
+        }
+
+        .addon-stream-remove {
+            min-width: 44px;
+            padding: 0.7rem 0.9rem;
         }
 
         .feature-toggle-row {
@@ -1874,7 +1953,7 @@
                                     <label class="feature-toggle-copy" for="returnStreams">
                                         <div class="feature-toggle-title">Return Streams</div>
                                         <div class="feature-toggle-hint">Attiva o disattiva il ritorno degli stream da
-                                            Easy Streams.</div>
+                                            Easy Streams. Le opzioni qui sotto valgono solo per Easy Streams.</div>
                                     </label>
                                     <label class="switch">
                                         <input type="checkbox" id="returnStreams" checked>
@@ -1884,14 +1963,39 @@
                             </div>
                             <div id="easyProxySettings" style="display: none;">
                                 <div class="input-group" style="margin-top: 1rem;">
-                                    <label for="easyProxyUrl">EasyProxy URL (opzionale)</label>
+                                    <label for="easyProxyUrl">EasyProxy URL per Easy Streams (opzionale)</label>
                                     <input type="url" id="easyProxyUrl" placeholder="https://your-proxy.example.com">
-                                    <div class="input-hint">Se Easy Streams richiede un proxy, inserisci qui l'URL base del tuo EasyProxy.</div>
+                                    <div class="input-hint">Usato solo per Easy Streams. Non influisce sui cataloghi di Easy Catalogs o sui cataloghi custom.</div>
                                 </div>
                                 <div class="input-group">
-                                    <label for="easyProxyPassword">EasyProxy Password (opzionale)</label>
+                                    <label for="easyProxyPassword">EasyProxy Password per Easy Streams (opzionale)</label>
                                     <input type="password" id="easyProxyPassword" placeholder="Password API del proxy">
-                                    <div class="input-hint">Viene inoltrata a Easy Streams come configurazione del manifest.</div>
+                                    <div class="input-hint">Usata solo da Easy Streams come configurazione del manifest.</div>
+                                </div>
+                                <div class="input-group">
+                                    <label>Addon Stream Custom (opzionale)</label>
+                                    <div class="addon-stream-summary">
+                                        <div class="addon-stream-summary-copy">
+                                            <div class="addon-stream-summary-title">Addon esterni per gli stream</div>
+                                            <div class="addon-stream-summary-text" id="customStreamAddonsSummary">Nessun addon custom configurato.</div>
+                                        </div>
+                                        <div class="addon-stream-actions">
+                                            <button type="button" class="catalog-action-btn is-primary" id="open-custom-stream-addons-modal-btn">Gestisci addon</button>
+                                        </div>
+                                    </div>
+                                    <div class="input-hint">Apri il pannello dedicato per aggiungere, modificare o rimuovere gli addon stream custom.</div>
+                                </div>
+                            </div>
+                            <div class="input-group" style="margin-top: 1rem;">
+                                <label>Addon Cataloghi Custom (opzionale)</label>
+                                <div class="addon-stream-summary">
+                                    <div class="addon-stream-summary-copy">
+                                        <div class="addon-stream-summary-title">Addon esterni per i cataloghi</div>
+                                        <div class="addon-stream-summary-text" id="customCatalogAddonsSummary">Nessun addon cataloghi configurato.</div>
+                                    </div>
+                                    <div class="addon-stream-actions">
+                                        <button type="button" class="catalog-action-btn is-primary" id="open-custom-catalog-addons-modal-btn">Gestisci cataloghi</button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="step-footer">
@@ -1935,6 +2039,10 @@
                             <button class="catalog-nav-btn" type="button" data-page="anime" role="tab"
                                 aria-selected="false" aria-controls="catalog-page-anime">
                                 Cataloghi Anime
+                            </button>
+                            <button class="catalog-nav-btn" type="button" data-page="custom" role="tab"
+                                aria-selected="false" aria-controls="catalog-page-custom">
+                                Cataloghi Custom
                             </button>
                         </div>
                         <div class="catalog-pages">
@@ -2037,6 +2145,17 @@
                                     <!-- Javascript will populate this -->
                                 </div>
                             </section>
+                            <section class="catalog-page" id="catalog-page-custom" data-page="custom" role="tabpanel">
+                                <div class="list-header">
+                                    <div>
+                                        <div class="list-title">Cataloghi Custom</div>
+                                        <div class="list-subtitle">Cataloghi caricati dai manifest custom aggiunti nello step Integrazioni.</div>
+                                    </div>
+                                </div>
+                                <div id="custom-catalog-sortable-list" class="sortable-list">
+                                    <!-- Javascript will populate this -->
+                                </div>
+                            </section>
                         </div>
                         <div class="step-footer">
                             <button type="button" class="btn btn-primary" id="selection-continue-btn">Continua</button>
@@ -2066,6 +2185,60 @@
                     </div>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <div class="modal" id="custom-stream-addons-modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-custom-stream-addons-modal></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-stream-addons-modal-title">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="custom-stream-addons-modal-title">Addon Stream Custom</div>
+                    <div class="modal-subtitle">Ogni addon resta separato e modificabile singolarmente.</div>
+                </div>
+                <button type="button" class="modal-close" id="close-custom-stream-addons-modal-btn" aria-label="Chiudi modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Manifest URL addon</label>
+                    <div id="customStreamAddonsList" class="addon-stream-list"></div>
+                    <div class="addon-stream-actions">
+                        <button type="button" class="catalog-action-btn is-primary" id="add-custom-stream-addon-btn">Aggiungi addon</button>
+                    </div>
+                    <div class="input-hint">Inserisci il manifest completo, ad esempio `https://addon.example.com/manifest.json`.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="modal-footer-note">Le modifiche vengono salvate nel link configurato di Easy Catalogs.</div>
+                <button type="button" class="btn btn-primary" id="save-custom-stream-addons-modal-btn">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="custom-catalog-addons-modal" aria-hidden="true">
+        <div class="modal-backdrop" data-close-custom-catalog-addons-modal></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-catalog-addons-modal-title">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="custom-catalog-addons-modal-title">Addon Cataloghi Custom</div>
+                    <div class="modal-subtitle">Ogni addon cataloghi resta separato e modificabile singolarmente.</div>
+                </div>
+                <button type="button" class="modal-close" id="close-custom-catalog-addons-modal-btn" aria-label="Chiudi modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Manifest URL addon cataloghi</label>
+                    <div id="customCatalogAddonsList" class="addon-stream-list"></div>
+                    <div class="addon-stream-actions">
+                        <button type="button" class="catalog-action-btn is-primary" id="add-custom-catalog-addon-btn">Aggiungi catalogo</button>
+                    </div>
+                    <div class="input-hint">Inserisci il manifest completo, ad esempio `https://addon.example.com/manifest.json`, oppure un link `stremio://`.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="modal-footer-note">I cataloghi dei manifest aggiunti verranno mostrati direttamente dentro Easy Catalogs.</div>
+                <button type="button" class="btn btn-primary" id="save-custom-catalog-addons-modal-btn">Chiudi</button>
+            </div>
         </div>
     </div>
 
@@ -2114,6 +2287,24 @@
             .map(provider => provider.slug);
         function decodeBase64Literal(value) {
             return atob(String(value || ""));
+        }
+
+        function encodeBase64UrlUtf8(value) {
+            const bytes = new TextEncoder().encode(String(value || ""));
+            let binary = "";
+            bytes.forEach(byte => {
+                binary += String.fromCharCode(byte);
+            });
+            return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+        }
+
+        function buildCustomCatalogProxyId(manifestUrl, catalog) {
+            if (!catalog || typeof catalog !== "object") return "";
+            return `extcat.${[
+                manifestUrl,
+                catalog.type || "",
+                catalog.id || ""
+            ].map(encodeBase64UrlUtf8).join(".")}`;
         }
 
         const STANDARD_CATALOGS = [
@@ -2170,6 +2361,7 @@
 
         const ALL_CATALOGS = [...STANDARD_CATALOGS, ...TOP10_CATALOGS, ...ANIME_CATALOGS];
         const CATALOGS_BY_ID = Object.fromEntries(ALL_CATALOGS.map(catalog => [catalog.id, catalog]));
+        let customCatalogDefinitions = [];
         const PROVIDERS_BY_SLUG = Object.fromEntries(PROVIDERS.map(provider => [provider.slug, provider]));
         function providerSupportsOriginal(provider) {
             return !!(provider && provider.supportsOriginal !== false);
@@ -2208,7 +2400,8 @@
         let sortOrders = {
             standard: [...DEFAULT_SORT_ORDERS.standard],
             top10: [...DEFAULT_SORT_ORDERS.top10],
-            anime: [...DEFAULT_SORT_ORDERS.anime]
+            anime: [...DEFAULT_SORT_ORDERS.anime],
+            custom: []
         };
         let selectedCatalogOrder = [];
         let selectedAnimeSource = "tmdb";
@@ -2394,7 +2587,8 @@
         }
 
         function getCatalogDefinition(id) {
-            return CATALOGS_BY_ID[normalizeLegacyCatalogId(id)] || null;
+            const normalizedId = normalizeLegacyCatalogId(id);
+            return CATALOGS_BY_ID[normalizedId] || customCatalogDefinitions.find(catalog => catalog.id === normalizedId) || null;
         }
 
         function getCatalogNameKey(id) {
@@ -2549,6 +2743,7 @@
 
         function getCatalogSection(id) {
             const normalizedId = normalizeLegacyCatalogId(id);
+            if (normalizedId.startsWith("extcat.")) return "custom";
             if (normalizedId.startsWith("anime")) return "anime";
             if (normalizedId === TOP10_GLOBAL_CATALOG_ID) return "top10";
             return "standard";
@@ -2662,6 +2857,10 @@
                 return getAnimeCatalogIdsForSource(selectedAnimeSource).includes(id) && catalogVisibility[id] !== false;
             }
 
+            if (section === "custom") {
+                return customCatalogDefinitions.some(catalog => catalog.id === id) && catalogVisibility[id] !== false;
+            }
+
             return false;
         }
 
@@ -2683,6 +2882,12 @@
             getAnimeCatalogIdsForSource(selectedAnimeSource).forEach(id => {
                 if (isSelectedCatalogEntryActive("anime", id)) {
                     keys.push(makeSelectedCatalogKey("anime", id));
+                }
+            });
+
+            sortOrders.custom.forEach(id => {
+                if (isSelectedCatalogEntryActive("custom", id)) {
+                    keys.push(makeSelectedCatalogKey("custom", id));
                 }
             });
 
@@ -2759,6 +2964,15 @@
             }
 
             const catalog = getCatalogDefinition(id);
+            if (section === "custom") {
+                return {
+                    renameId: id,
+                    defaultName: catalog ? catalog.name : id,
+                    tags: ["Custom", catalog && catalog.type ? catalog.type : "Catalogo"],
+                    note: catalog && catalog.source ? catalog.source : ""
+                };
+            }
+
             return {
                 renameId: id,
                 defaultName: catalog ? catalog.name : id,
@@ -2872,6 +3086,12 @@
                 return;
             }
 
+            if (section === "custom") {
+                if (!catalogVisibility[id]) return;
+                catalogs.push(id);
+                return;
+            }
+
             if (!getAnimeCatalogIdsForSource(selectedAnimeSource).includes(id) || !catalogVisibility[id]) return;
             catalogs.push(id);
             if (!isHome) catalogs[catalogs.length - 1] += "_d";
@@ -2918,6 +3138,10 @@
 
                 if (!catalogVisibility[id]) return;
                 markShape(id);
+                return;
+            }
+
+            if (section === "custom") {
                 return;
             }
 
@@ -3064,6 +3288,269 @@
             easyProxySettings.style.display = returnStreamsInput.checked ? "" : "none";
         }
 
+        function getCustomStreamAddonInputs() {
+            return Array.from(document.querySelectorAll(".custom-stream-addon-input"));
+        }
+
+        function normalizeCustomStreamAddonUrl(value) {
+            let normalizedValue = String(value || "").trim();
+            if (!normalizedValue) return "";
+
+            if (/^stremio:\/\//i.test(normalizedValue)) {
+                normalizedValue = normalizedValue.replace(/^stremio:\/\//i, "https://");
+            }
+
+            return normalizedValue;
+        }
+
+        function getCustomCatalogAddonInputs() {
+            return Array.from(document.querySelectorAll(".custom-catalog-addon-input"));
+        }
+
+        function normalizeCustomCatalogAddonUrl(value) {
+            return normalizeCustomStreamAddonUrl(value);
+        }
+
+        async function loadCustomCatalogDefinitions() {
+            const manifestUrls = [...new Set(getCustomCatalogAddonValues())];
+            customCatalogDefinitions = [];
+
+            if (manifestUrls.length === 0) {
+                sortOrders.custom = [];
+                renderCatalogList("custom");
+                refreshSelectedCatalogList();
+                return;
+            }
+
+            const manifests = await Promise.all(manifestUrls.map(async manifestUrl => {
+                try {
+                    const response = await fetch(normalizeCustomCatalogAddonUrl(manifestUrl), {
+                        headers: { Accept: "application/json" }
+                    });
+                    if (!response.ok) return null;
+                    return await response.json();
+                } catch (error) {
+                    return null;
+                }
+            }));
+
+            customCatalogDefinitions = manifests.flatMap((manifest, index) => {
+                const catalogs = Array.isArray(manifest && manifest.catalogs) ? manifest.catalogs : [];
+                const addonName = String(manifest && manifest.name || `Addon ${index + 1}`).trim();
+
+                return catalogs
+                    .filter(catalog => catalog && typeof catalog === "object" && catalog.id && catalog.type)
+                    .map(catalog => ({
+                        id: buildCustomCatalogProxyId(manifestUrls[index], catalog),
+                        name: `${catalog.name || catalog.id} · ${addonName}`,
+                        type: catalog.type || "Catalogo",
+                        source: addonName
+                    }));
+            });
+
+            sortOrders.custom = customCatalogDefinitions.map(catalog => catalog.id);
+            customCatalogDefinitions.forEach(catalog => {
+                if (!(catalog.id in catalogVisibility)) {
+                    catalogVisibility[catalog.id] = true;
+                }
+            });
+
+            renderCatalogList("custom");
+            refreshSelectedCatalogList();
+        }
+
+        function getCustomStreamAddonValues() {
+            return getCustomStreamAddonInputs()
+                .map(input => input.value)
+                .map(normalizeCustomStreamAddonUrl)
+                .filter(Boolean);
+        }
+
+        function getCustomCatalogAddonValues() {
+            return getCustomCatalogAddonInputs()
+                .map(input => input.value)
+                .map(normalizeCustomCatalogAddonUrl)
+                .filter(Boolean);
+        }
+
+        function renderCustomStreamAddonSummary() {
+            const summary = document.getElementById("customStreamAddonsSummary");
+            if (!summary) return;
+
+            const values = getCustomStreamAddonValues();
+            if (values.length === 0) {
+                summary.textContent = "Nessun addon custom configurato.";
+                return;
+            }
+
+            summary.textContent = values.length === 1
+                ? "1 addon custom configurato."
+                : `${values.length} addon custom configurati.`;
+        }
+
+        function renderCustomCatalogAddonSummary() {
+            const summary = document.getElementById("customCatalogAddonsSummary");
+            if (!summary) return;
+
+            const values = getCustomCatalogAddonValues();
+            if (values.length === 0) {
+                summary.textContent = "Nessun addon cataloghi configurato.";
+                return;
+            }
+
+            summary.textContent = values.length === 1
+                ? "1 addon cataloghi configurato."
+                : `${values.length} addon cataloghi configurati.`;
+        }
+
+        function toggleCustomStreamAddonsModal(isOpen) {
+            const modal = document.getElementById("custom-stream-addons-modal");
+            if (!modal) return;
+
+            modal.classList.toggle("open", isOpen);
+            modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+            document.body.classList.toggle("modal-open", isOpen);
+
+            if (isOpen) {
+                const firstInput = getCustomStreamAddonInputs()[0];
+                if (firstInput) firstInput.focus();
+            }
+        }
+
+        function toggleCustomCatalogAddonsModal(isOpen) {
+            const modal = document.getElementById("custom-catalog-addons-modal");
+            if (!modal) return;
+
+            modal.classList.toggle("open", isOpen);
+            modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+            document.body.classList.toggle("modal-open", isOpen);
+
+            if (isOpen) {
+                const firstInput = getCustomCatalogAddonInputs()[0];
+                if (firstInput) firstInput.focus();
+            }
+        }
+
+        function createCustomStreamAddonRow(value = "") {
+            const list = document.getElementById("customStreamAddonsList");
+            if (!list) return;
+
+            const row = document.createElement("div");
+            row.className = "addon-stream-row";
+            row.innerHTML = `
+                <input
+                    type="url"
+                    class="custom-stream-addon-input"
+                    placeholder="https://addon.example.com/manifest.json"
+                    value="${escapeHtml(value)}"
+                >
+                <button type="button" class="catalog-action-btn addon-stream-remove" aria-label="Rimuovi addon stream">Rimuovi</button>
+            `;
+
+            const removeButton = row.querySelector(".addon-stream-remove");
+            const input = row.querySelector(".custom-stream-addon-input");
+            removeButton.addEventListener("click", () => {
+                row.remove();
+                ensureCustomStreamAddonRow();
+                renderCustomStreamAddonSummary();
+            });
+            input.addEventListener("input", renderCustomStreamAddonSummary);
+            input.addEventListener("blur", () => {
+                input.value = normalizeCustomStreamAddonUrl(input.value);
+                renderCustomStreamAddonSummary();
+            });
+
+            list.appendChild(row);
+        }
+
+        function createCustomCatalogAddonRow(value = "") {
+            const list = document.getElementById("customCatalogAddonsList");
+            if (!list) return;
+
+            const row = document.createElement("div");
+            row.className = "addon-stream-row";
+            row.innerHTML = `
+                <input
+                    type="url"
+                    class="custom-catalog-addon-input"
+                    placeholder="https://addon.example.com/manifest.json"
+                    value="${escapeHtml(value)}"
+                >
+                <button type="button" class="catalog-action-btn addon-stream-remove" aria-label="Rimuovi addon cataloghi">Rimuovi</button>
+            `;
+
+            const removeButton = row.querySelector(".addon-stream-remove");
+            const input = row.querySelector(".custom-catalog-addon-input");
+            removeButton.addEventListener("click", () => {
+                row.remove();
+                ensureCustomCatalogAddonRow();
+                renderCustomCatalogAddonSummary();
+            });
+            input.addEventListener("input", renderCustomCatalogAddonSummary);
+            input.addEventListener("blur", () => {
+                input.value = normalizeCustomCatalogAddonUrl(input.value);
+                renderCustomCatalogAddonSummary();
+            });
+
+            list.appendChild(row);
+        }
+
+        function ensureCustomStreamAddonRow() {
+            const list = document.getElementById("customStreamAddonsList");
+            if (!list) return;
+
+            if (list.children.length === 0) {
+                createCustomStreamAddonRow("");
+            }
+        }
+
+        function ensureCustomCatalogAddonRow() {
+            const list = document.getElementById("customCatalogAddonsList");
+            if (!list) return;
+
+            if (list.children.length === 0) {
+                createCustomCatalogAddonRow("");
+            }
+        }
+
+        function setCustomStreamAddonRows(values = []) {
+            const list = document.getElementById("customStreamAddonsList");
+            if (!list) return;
+
+            list.innerHTML = "";
+            const normalizedValues = (Array.isArray(values) ? values : [])
+                .map(normalizeCustomStreamAddonUrl)
+                .filter(Boolean);
+
+            if (normalizedValues.length === 0) {
+                createCustomStreamAddonRow("");
+                renderCustomStreamAddonSummary();
+                return;
+            }
+
+            normalizedValues.forEach(value => createCustomStreamAddonRow(value));
+            renderCustomStreamAddonSummary();
+        }
+
+        function setCustomCatalogAddonRows(values = []) {
+            const list = document.getElementById("customCatalogAddonsList");
+            if (!list) return;
+
+            list.innerHTML = "";
+            const normalizedValues = (Array.isArray(values) ? values : [])
+                .map(normalizeCustomCatalogAddonUrl)
+                .filter(Boolean);
+
+            if (normalizedValues.length === 0) {
+                createCustomCatalogAddonRow("");
+                renderCustomCatalogAddonSummary();
+                return;
+            }
+
+            normalizedValues.forEach(value => createCustomCatalogAddonRow(value));
+            renderCustomCatalogAddonSummary();
+        }
+
         function applyInitialConfiguration(config) {
             const resolvedConfig = config && typeof config === "object" ? config : {};
             catalogCustomNames = normalizeCatalogCustomNames(resolvedConfig.catalogNames);
@@ -3082,6 +3569,20 @@
             if (typeof resolvedConfig.easyProxyPassword === "string") {
                 document.getElementById("easyProxyPassword").value = resolvedConfig.easyProxyPassword;
             }
+
+            const customStreamAddonValues = Array.isArray(resolvedConfig.customStreamAddons)
+                ? resolvedConfig.customStreamAddons
+                : (typeof resolvedConfig.customStreamAddons === "string"
+                    ? resolvedConfig.customStreamAddons.split(/\r?\n|,/)
+                    : []);
+            setCustomStreamAddonRows(customStreamAddonValues);
+
+            const customCatalogAddonValues = Array.isArray(resolvedConfig.customCatalogAddons)
+                ? resolvedConfig.customCatalogAddons
+                : (typeof resolvedConfig.customCatalogAddons === "string"
+                    ? resolvedConfig.customCatalogAddons.split(/\r?\n|,/)
+                    : []);
+            setCustomCatalogAddonRows(customCatalogAddonValues);
 
             updateEasyProxyVisibility();
 
@@ -3418,9 +3919,123 @@
             return li;
         }
 
+        function createCustomCatalogItem(catalog) {
+            if (!catalog) return null;
+
+            const id = catalog.id;
+            const li = document.createElement("div");
+            li.className = "catalog-item";
+            li.dataset.id = id;
+
+            const isChecked = catalogVisibility[id] !== false;
+            const isHome = catalogHomeVisibility[id] !== false;
+            const customName = getCatalogCustomName(id);
+            const displayName = customName || catalog.name;
+            const landscapeKey = makeSelectedCatalogKey("custom", id);
+            const isLandscape = !!catalogLandscape[landscapeKey];
+
+            li.innerHTML = `
+                <div class="drag-handle">${DRAG_ICON}</div>
+                <div class="catalog-info">
+                    <div class="catalog-name-row">
+                        <div class="catalog-name">${escapeHtml(displayName)}</div>
+                        <button type="button" class="catalog-action-btn catalog-rename-toggle">Modifica</button>
+                    </div>
+                    <div class="catalog-meta">
+                        <span class="catalog-type">Custom</span>
+                        <span class="catalog-type is-muted">${escapeHtml(catalog.type || "Catalogo")}</span>
+                        ${catalog.source ? `<span class="catalog-note">${escapeHtml(catalog.source)}</span>` : ""}
+                    </div>
+                    <div class="catalog-rename-row">
+                        <input
+                            type="text"
+                            class="catalog-rename-input"
+                            value="${escapeHtml(customName)}"
+                            placeholder="${escapeHtml(catalog.name)}"
+                            aria-label="Nome personalizzato per ${escapeHtml(catalog.name)}"
+                        >
+                        <div class="catalog-rename-actions">
+                            <button type="button" class="catalog-action-btn is-primary catalog-rename-save">Salva</button>
+                            <button type="button" class="catalog-action-btn catalog-rename-cancel">Annulla</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="catalog-controls">
+                    <div class="toggle-group">
+                        <span class="toggle-label">Attivo</span>
+                        <label class="switch">
+                            <input type="checkbox" class="vis-custom" ${isChecked ? "checked" : ""}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Landscape</span>
+                        <label class="switch">
+                            <input type="checkbox" class="landscape-check" ${isLandscape ? "checked" : ""}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div style="width: 1px; height: 30px; background: var(--border-color); margin: 0 0.5rem;"></div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Home</span>
+                        <label class="switch">
+                            <input type="checkbox" class="home-check" ${isHome ? "checked" : ""} ${!isChecked ? "disabled" : ""}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            `;
+
+            const visCustom = li.querySelector(".vis-custom");
+            const landscapeCheck = li.querySelector(".landscape-check");
+            const homeCheck = li.querySelector(".home-check");
+            visCustom.addEventListener("change", event => {
+                catalogVisibility[id] = event.target.checked;
+                if (homeCheck) homeCheck.disabled = !event.target.checked;
+                refreshSelectedCatalogList();
+            });
+
+            if (landscapeCheck) {
+                landscapeCheck.addEventListener("change", event => {
+                    catalogLandscape[landscapeKey] = event.target.checked;
+                });
+            }
+
+            if (homeCheck) {
+                homeCheck.addEventListener("change", event => {
+                    catalogHomeVisibility[id] = event.target.checked;
+                });
+            }
+
+            bindCatalogRenameControls(li, id, catalog.name);
+            return li;
+        }
+
         function renderCatalogList(section) {
-            const list = document.getElementById(`${section}-sortable-list`);
+            const list = document.getElementById(section === "custom" ? "custom-catalog-sortable-list" : `${section}-sortable-list`);
+            if (!list) return;
             list.innerHTML = "";
+
+            if (section === "custom") {
+                if (sortOrders.custom.length === 0) {
+                    const emptyState = document.createElement("div");
+                    emptyState.className = "empty-state";
+                    emptyState.textContent = "Nessun catalogo custom disponibile. Aggiungi un manifest cataloghi nello step Integrazioni per gestirlo qui.";
+                    list.appendChild(emptyState);
+                    refreshSelectedCatalogList();
+                    return;
+                }
+
+                sortOrders.custom.forEach(id => {
+                    const item = createCustomCatalogItem(getCatalogDefinition(id));
+                    if (item) {
+                        list.appendChild(item);
+                    }
+                });
+
+                refreshSelectedCatalogList();
+                return;
+            }
 
             const orderedIds = section === "anime"
                 ? getAnimeCatalogIdsForSource(selectedAnimeSource)
@@ -3522,7 +4137,7 @@
             });
         }
 
-        const CATALOG_PAGE_ORDER = ["top10", "standard", "anime"];
+        const CATALOG_PAGE_ORDER = ["top10", "standard", "anime", "custom"];
 
         function getActiveCatalogPage() {
             const activeButton = document.querySelector(".catalog-nav-btn.active");
@@ -3547,11 +4162,15 @@
             const returnStreams = document.getElementById("returnStreams").checked;
             const easyProxyUrl = document.getElementById("easyProxyUrl").value.trim().replace(/\/+$/, "");
             const easyProxyPassword = document.getElementById("easyProxyPassword").value.trim();
+            const customStreamAddons = getCustomStreamAddonValues();
+            const customCatalogAddons = getCustomCatalogAddonValues();
 
             if (tmdbApiKey) config.tmdbApiKey = tmdbApiKey;
             if (!returnStreams) config.returnStreams = false;
             if (easyProxyUrl) config.easyProxyUrl = easyProxyUrl;
             if (easyProxyPassword) config.easyProxyPassword = easyProxyPassword;
+            if (customStreamAddons.length > 0) config.customStreamAddons = customStreamAddons;
+            if (customCatalogAddons.length > 0) config.customCatalogAddons = customCatalogAddons;
 
             const erdbTokenValue = document.getElementById("erdbToken").value.trim();
             const erdbBaseUrlValue = normalizeErdbBaseUrl(document.getElementById("erdbBaseUrl").value.trim());
@@ -3713,10 +4332,98 @@
             returnStreamsInput.addEventListener("change", updateEasyProxyVisibility);
         }
 
+        const addCustomStreamAddonButton = document.getElementById("add-custom-stream-addon-btn");
+        if (addCustomStreamAddonButton) {
+            addCustomStreamAddonButton.addEventListener("click", () => {
+                createCustomStreamAddonRow("");
+                const inputs = getCustomStreamAddonInputs();
+                const lastInput = inputs[inputs.length - 1];
+                if (lastInput) lastInput.focus();
+                renderCustomStreamAddonSummary();
+            });
+        }
+
+        const addCustomCatalogAddonButton = document.getElementById("add-custom-catalog-addon-btn");
+        if (addCustomCatalogAddonButton) {
+            addCustomCatalogAddonButton.addEventListener("click", () => {
+                createCustomCatalogAddonRow("");
+                const inputs = getCustomCatalogAddonInputs();
+                const lastInput = inputs[inputs.length - 1];
+                if (lastInput) lastInput.focus();
+                renderCustomCatalogAddonSummary();
+            });
+        }
+
+        const openCustomStreamAddonsModalButton = document.getElementById("open-custom-stream-addons-modal-btn");
+        if (openCustomStreamAddonsModalButton) {
+            openCustomStreamAddonsModalButton.addEventListener("click", () => {
+                toggleCustomStreamAddonsModal(true);
+            });
+        }
+
+        const openCustomCatalogAddonsModalButton = document.getElementById("open-custom-catalog-addons-modal-btn");
+        if (openCustomCatalogAddonsModalButton) {
+            openCustomCatalogAddonsModalButton.addEventListener("click", () => {
+                toggleCustomCatalogAddonsModal(true);
+            });
+        }
+
+        const closeCustomStreamAddonsModalButton = document.getElementById("close-custom-stream-addons-modal-btn");
+        if (closeCustomStreamAddonsModalButton) {
+            closeCustomStreamAddonsModalButton.addEventListener("click", () => {
+                toggleCustomStreamAddonsModal(false);
+            });
+        }
+
+        const closeCustomCatalogAddonsModalButton = document.getElementById("close-custom-catalog-addons-modal-btn");
+        if (closeCustomCatalogAddonsModalButton) {
+            closeCustomCatalogAddonsModalButton.addEventListener("click", () => {
+                toggleCustomCatalogAddonsModal(false);
+            });
+        }
+
+        const saveCustomStreamAddonsModalButton = document.getElementById("save-custom-stream-addons-modal-btn");
+        if (saveCustomStreamAddonsModalButton) {
+            saveCustomStreamAddonsModalButton.addEventListener("click", () => {
+                renderCustomStreamAddonSummary();
+                toggleCustomStreamAddonsModal(false);
+            });
+        }
+
+        const saveCustomCatalogAddonsModalButton = document.getElementById("save-custom-catalog-addons-modal-btn");
+        if (saveCustomCatalogAddonsModalButton) {
+            saveCustomCatalogAddonsModalButton.addEventListener("click", async () => {
+                renderCustomCatalogAddonSummary();
+                await loadCustomCatalogDefinitions();
+                toggleCustomCatalogAddonsModal(false);
+            });
+        }
+
+        document.querySelectorAll("[data-close-custom-stream-addons-modal]").forEach(element => {
+            element.addEventListener("click", () => {
+                toggleCustomStreamAddonsModal(false);
+            });
+        });
+
+        document.querySelectorAll("[data-close-custom-catalog-addons-modal]").forEach(element => {
+            element.addEventListener("click", () => {
+                toggleCustomCatalogAddonsModal(false);
+            });
+        });
+
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape") {
+                toggleCustomStreamAddonsModal(false);
+                toggleCustomCatalogAddonsModal(false);
+            }
+        });
+
         applyInitialConfiguration(decodeConfigFromPath());
+        loadCustomCatalogDefinitions();
         renderCatalogList("standard");
         renderCatalogList("top10");
         renderCatalogList("anime");
+        renderCatalogList("custom");
         initializeSelectedCatalogSortable();
         switchSetupStep("overview");
         switchCatalogPage("top10");
