@@ -21,6 +21,12 @@ const NEGATIVE_CACHE_MARKER = "__negative_cache__";
 const TOP10_GLOBAL_CATALOG_ID = "top10_italia";
 const TOP10_MOVIE_CONFIG_ID = "top10_italia_movie";
 const TOP10_SERIES_CONFIG_ID = "top10_italia_series";
+const LAST_VIDEOS_CATALOG_ID = "lastVideosIds";
+const CALENDAR_VIDEOS_CATALOG_ID = "calendarVideosIds";
+const LAST_VIDEOS_EXTRA_NAME = "lastVideosIds";
+const CALENDAR_VIDEOS_EXTRA_NAME = "calendarVideosIds";
+const LAST_VIDEOS_ITEMS_LIMIT = 20;
+const CALENDAR_VIDEOS_ITEMS_LIMIT = 10;
 const HOME_TMDB_MAX_PAGES = Number.parseInt(process.env.TMDB_HOME_MAX_PAGES || "20", 10);
 const HOME_TMDB_PAGE_CAP = Number.isFinite(HOME_TMDB_MAX_PAGES) && HOME_TMDB_MAX_PAGES > 0
     ? HOME_TMDB_MAX_PAGES
@@ -64,25 +70,6 @@ function normalizeImdbId(imdbId) {
     return imdbStr.toLowerCase().startsWith("tt") ? imdbStr : `tt${imdbStr}`;
 }
 
-function normalizeSeriesMetaRequestId(type, id) {
-    const normalizedType = String(type || "").trim();
-    const normalizedId = String(id || "").trim();
-    if (normalizedType !== "series" || !normalizedId) return normalizedId;
-
-    const episodeMatch = normalizedId.match(/^((?:tt\d+|tmdb:\d+|kitsu:[^:]+)):\d+:\d+$/i);
-    return episodeMatch ? episodeMatch[1] : normalizedId;
-}
-
-function slugify(value) {
-    return String(value || "")
-        .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .replace(/-{2,}/g, "-");
-}
-
 function getPrimaryMediaId(imdbId, tmdbId) {
     const normalizedImdbId = normalizeImdbId(imdbId);
     return normalizedImdbId || `tmdb:${tmdbId}`;
@@ -111,31 +98,9 @@ function normalizeExtraIdList(rawValue) {
 }
 
 function parseVideoReleaseTimestamp(video) {
-    if (!video) return null;
-    const releaseValue = video.firstAired || video.released;
-    if (!releaseValue) return null;
-    const timestamp = Date.parse(releaseValue);
+    if (!video || !video.released) return null;
+    const timestamp = Date.parse(video.released);
     return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function buildCanonicalEpisodeVideo(baseVideo) {
-    if (!baseVideo || typeof baseVideo !== "object") return baseVideo;
-
-    const episodeNumber = Number.parseInt(String(baseVideo.episode || baseVideo.number || ""), 10);
-    const released = baseVideo.firstAired || baseVideo.released || undefined;
-    const title = baseVideo.name || baseVideo.title || undefined;
-    const overview = baseVideo.description || baseVideo.overview || undefined;
-
-    return {
-        ...baseVideo,
-        title,
-        name: title,
-        released,
-        firstAired: released,
-        overview,
-        description: overview,
-        number: Number.isFinite(episodeNumber) ? episodeNumber : undefined
-    };
 }
 
 function compareVideosByRelease(left, right) {
@@ -161,6 +126,43 @@ function compareVideosByRelease(left, right) {
     }
 
     return String(left && left.id || "").localeCompare(String(right && right.id || ""));
+}
+
+function getOrderedSeriesVideos(videos) {
+    return (Array.isArray(videos) ? videos : [])
+        .filter(video => video && typeof video === "object" && String(video.id || "").trim())
+        .sort(compareVideosByRelease);
+}
+
+function isStandardEpisodeVideo(video) {
+    const seasonNumber = Number.parseInt(String(video && video.season || ""), 10);
+    return !Number.isFinite(seasonNumber) || seasonNumber > 0;
+}
+
+function selectSeriesVideosForSpecialCatalog(videos, catalogId) {
+    const orderedVideos = getOrderedSeriesVideos(videos);
+    if (orderedVideos.length === 0) return [];
+
+    if (catalogId === LAST_VIDEOS_CATALOG_ID) {
+        const now = Date.now();
+        const standardEpisodes = orderedVideos.filter(isStandardEpisodeVideo);
+        const airedStandardEpisodes = standardEpisodes.filter(video => {
+            const releasedAt = parseVideoReleaseTimestamp(video);
+            return releasedAt !== null && releasedAt <= now;
+        });
+        const selectedPool = airedStandardEpisodes.length > 0
+            ? airedStandardEpisodes
+            : (standardEpisodes.length > 0 ? standardEpisodes : orderedVideos);
+        return selectedPool.slice(-LAST_VIDEOS_ITEMS_LIMIT);
+    }
+
+    if (catalogId === CALENDAR_VIDEOS_CATALOG_ID) {
+        const datedVideos = orderedVideos.filter(video => parseVideoReleaseTimestamp(video) !== null);
+        const selectedPool = datedVideos.length > 0 ? datedVideos : orderedVideos;
+        return selectedPool.slice(-CALENDAR_VIDEOS_ITEMS_LIMIT);
+    }
+
+    return orderedVideos;
 }
 
 function alignMetaIdentity(meta, requestedId) {
@@ -1552,7 +1554,7 @@ const KITSU_TTL_SECONDS = {
 
 function getTmdbApiKey(config = null) {
     const resolvedConfig = getRequestConfig(config);
-
+    
     // First priority: Try to get it from erdbConfig
     const erdbCfg = getErdbConfig(resolvedConfig);
     if (erdbCfg && erdbCfg.rawConfig && erdbCfg.rawConfig.tmdbKey) {
@@ -3837,7 +3839,7 @@ async function buildTmdbSeriesVideosFromStandardSeasons(item, cinemetaMeta, conf
                 ? `https://image.tmdb.org/t/p/w500${episode.still_path}`
                 : (cinemetaThumb || fallbackBackdrop);
 
-            videos.push(buildCanonicalEpisodeVideo({
+            videos.push({
                 id: `${primaryMediaId}:${episode.season_number}:${episodeNumber}`,
                 title: episode.name,
                 released,
@@ -3845,7 +3847,7 @@ async function buildTmdbSeriesVideosFromStandardSeasons(item, cinemetaMeta, conf
                 overview: episode.overview,
                 season: episode.season_number,
                 episode: episodeNumber
-            }));
+            });
         });
     });
 
@@ -3920,7 +3922,7 @@ function buildTmdbSeriesVideosFromEpisodeGroup(item, episodeGroupDetails, cineme
                 ? `https://image.tmdb.org/t/p/w500${episode.still_path}`
                 : (cinemetaThumb || fallbackBackdrop);
 
-            videos.push(buildCanonicalEpisodeVideo({
+            videos.push({
                 id: `${primaryMediaId}:${seasonNumber}:${episodeNumber}`,
                 title: (episode && episode.name) || `Episode ${episodeNumber}`,
                 released,
@@ -3928,7 +3930,7 @@ function buildTmdbSeriesVideosFromEpisodeGroup(item, episodeGroupDetails, cineme
                 overview: episode && episode.overview ? episode.overview : undefined,
                 season: seasonNumber,
                 episode: episodeNumber
-            }));
+            });
         });
     });
 
@@ -4351,7 +4353,7 @@ function buildKitsuEpisodeVideos(kitsuId, episodes, fallbackEpisodeCount = 0, co
 
     normalizedEpisodes.sort((a, b) => a.number - b.number);
 
-    return normalizedEpisodes.map(episode => buildCanonicalEpisodeVideo({
+    return normalizedEpisodes.map(episode => ({
         id: `kitsu:${normalizedKitsuId}:${episode.number}`,
         title: episode.title,
         season: 1,
@@ -4439,7 +4441,7 @@ async function enrichKitsuEpisodeVideosWithAnimeMapping(kitsuId, videos, tmdbDet
             : null;
         const tmdbReleased = tmdbEpisode && tmdbEpisode.air_date ? safeToIsoString(tmdbEpisode.air_date) : null;
 
-        return buildCanonicalEpisodeVideo({
+        return {
             ...video,
             title: /^episodio\s+\d+$/i.test(String(video.title || "")) && tmdbEpisode && tmdbEpisode.name
                 ? tmdbEpisode.name
@@ -4447,7 +4449,7 @@ async function enrichKitsuEpisodeVideosWithAnimeMapping(kitsuId, videos, tmdbDet
             released: video.released || tmdbReleased || undefined,
             thumbnail: configuredThumbnailUrl || tmdbThumbnail || video.thumbnail,
             overview: (tmdbEpisode && tmdbEpisode.overview) || video.overview || undefined
-        });
+        };
     });
 }
 
@@ -4552,9 +4554,6 @@ function buildKitsuMetaFromPayload(kitsuId, payload, requestedType, config = nul
 
     const meta = {
         id: metaId,
-        imdb_id: assetImdbId || undefined,
-        moviedb_id: assetTmdbId || undefined,
-        slug: `${type}/${slugify(getKitsuPreferredTitle(attributes, config) || `kitsu ${normalizedKitsuId}`)}-${normalizedKitsuId}`,
         type,
         name: getKitsuPreferredTitle(attributes, config) || `Kitsu ${normalizedKitsuId}`,
         poster: poster || undefined,
@@ -4565,7 +4564,6 @@ function buildKitsuMetaFromPayload(kitsuId, payload, requestedType, config = nul
         released: safeToIsoString(attributes.startDate),
         year: releaseInfo || undefined,
         imdbRating: attributes.averageRating ? (parseFloat(attributes.averageRating) / 10).toFixed(1) : null,
-        genre: getKitsuCategories(payload),
         runtime: attributes.episodeLength
             ? `${attributes.episodeLength} min`
             : (attributes.totalLength ? `${attributes.totalLength} min` : null),
@@ -5151,11 +5149,12 @@ const PROVIDERS_SERIES_ONLY = new Set(["Discovery+"]);
 
 const manifest = {
     id: "org.bestia.easycatalogs",
-    version: "1.0.58",
+    version: "1.0.56",
     name: "Easy Catalogs",
     description: "Easy Catalogs per Stremio",
     behaviorHints: {
-        configurable: true
+        configurable: true,
+        newEpisodeNotifications: true
     },
     resources: [
         "catalog",
@@ -5304,6 +5303,26 @@ const fullCatalogs = [
         name: "Ricerca TMDB",
         extra: [{ name: "search", isRequired: true }]
     },
+    {
+        type: "series",
+        id: LAST_VIDEOS_CATALOG_ID,
+        name: "Last videos",
+        extra: [{
+            name: LAST_VIDEOS_EXTRA_NAME,
+            isRequired: true,
+            optionsLimit: 100
+        }]
+    },
+    {
+        type: "series",
+        id: CALENDAR_VIDEOS_CATALOG_ID,
+        name: "Calendar videos",
+        extra: [{
+            name: CALENDAR_VIDEOS_EXTRA_NAME,
+            isRequired: true,
+            optionsLimit: 100
+        }]
+    }
 ];
 
 // Add Provider Catalogs dynamically to fullCatalogs
@@ -5544,8 +5563,6 @@ function getMetaCacheKey(type, id, config = null) {
 }
 
 async function buildMetaForId(type, id, config = null) {
-    id = normalizeSeriesMetaRequestId(type, id);
-
     if (id.startsWith("kitsu:")) {
         return buildMetaForKitsuId(type, id, config);
     }
@@ -5582,7 +5599,6 @@ async function buildMetaForId(type, id, config = null) {
 }
 
 async function getCachedMetaForId(type, id, config = null) {
-    id = normalizeSeriesMetaRequestId(type, id);
     const cacheKey = getMetaCacheKey(type, id, config);
     const metaTtl = type === "movie" ? CACHE_TTL_SECONDS.metaMovie : CACHE_TTL_SECONDS.metaSeries;
 
@@ -5606,22 +5622,41 @@ async function getCachedMetaForId(type, id, config = null) {
     return null;
 }
 
+async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = null) {
+    const extraName = catalogId === LAST_VIDEOS_CATALOG_ID
+        ? LAST_VIDEOS_EXTRA_NAME
+        : (catalogId === CALENDAR_VIDEOS_CATALOG_ID ? CALENDAR_VIDEOS_EXTRA_NAME : "");
+    if (!extraName) return [];
+
+    const requestedIds = normalizeExtraIdList(extra && extra[extraName]).slice(0, 100);
+    if (requestedIds.length === 0) return [];
+
+    const metas = await mapWithConcurrency(requestedIds, 4, async seriesId => {
+        const cachedMeta = await getCachedMetaForId("series", seriesId, config);
+        if (!cachedMeta || !Array.isArray(cachedMeta.videos) || cachedMeta.videos.length === 0) {
+            return null;
+        }
+
+        const alignedMeta = alignMetaIdentity(cachedMeta, seriesId);
+        const selectedVideos = selectSeriesVideosForSpecialCatalog(alignedMeta.videos, catalogId);
+        if (selectedVideos.length === 0) return null;
+
+        return {
+            ...alignedMeta,
+            videos: selectedVideos
+        };
+    });
+
+    return metas.filter(Boolean);
+}
+
 // Metadata Handler
 builder.defineMetaHandler(async ({ type, id }) => {
     console.log(`[Easy Catalogs] Meta Request: type=${type} id=${id}`);
 
     const config = getRequestConfig();
-    const normalizedId = normalizeSeriesMetaRequestId(type, id);
-    const meta = await getCachedMetaForId(type, normalizedId, config);
-    
-    if (!meta) {
-        console.warn(`[Easy Catalogs] Meta NOT found: type=${type} id=${id} (normalized=${normalizedId})`);
-        return { meta: {} };
-    }
-
-    // Align metadata identity to ensure Stremio accepts the response
-    const alignedMeta = alignMetaIdentity(meta, id);
-    return { meta: alignedMeta };
+    const meta = await getCachedMetaForId(type, id, config);
+    return meta ? { meta } : { meta: {} };
 });
 
 async function transformToMeta(item, type, config = null, options = {}) {
@@ -5645,9 +5680,11 @@ async function transformToMeta(item, type, config = null, options = {}) {
             }
         }
     } else if (!isMovie) {
-        // ALWAYS use first_air_date as the primary release date for the series meta object
-        // Stremio uses this to identify the series year and status
-        exactReleaseDate = item.first_air_date || item.last_air_date;
+        if (item.next_episode_to_air) {
+            exactReleaseDate = item.next_episode_to_air.air_date;
+        } else if (item.last_air_date) {
+            exactReleaseDate = item.last_air_date;
+        }
     }
 
     const formattedDate = exactReleaseDate ? exactReleaseDate.split('-').reverse().join('/') : null;
@@ -5739,9 +5776,6 @@ async function transformToMeta(item, type, config = null, options = {}) {
 
     return {
         id: primaryMediaId,
-        imdb_id: imdbId || undefined,
-        moviedb_id: item.id || undefined,
-        slug: `${type}/${slugify(getPreferredTmdbTitle(item, type) || item.title || item.name || item.id)}-${String(primaryMediaId).replace(/^tt/i, "")}`,
         type: type,
         name: getPreferredTmdbTitle(item, type),
         poster: poster,
@@ -5752,7 +5786,6 @@ async function transformToMeta(item, type, config = null, options = {}) {
         released: exactReleaseDate ? new Date(exactReleaseDate).toISOString() : null,
         year: year,
         imdbRating: fetchedImdbRating || (item.vote_average !== undefined ? item.vote_average.toFixed(1) : null),
-        genre: item.genres ? item.genres.map(g => g.name) : [],
         genres: item.genres ? item.genres.map(g => g.name) : [],
         cast: item.credits && item.credits.cast ? item.credits.cast.slice(0, 10).map(c => c.name) : [],
         director: [
@@ -5878,6 +5911,11 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
         if (isTop10CatalogId(sourceCatalogId)) {
             const metas = await fetchTop10CatalogMetas(sourceCatalogId, type, resolvedExtra, config);
             return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
+        }
+
+        if (type === "series" && (sourceCatalogId === LAST_VIDEOS_CATALOG_ID || sourceCatalogId === CALENDAR_VIDEOS_CATALOG_ID)) {
+            const metasDetailed = await fetchSpecialSeriesCatalogMetas(sourceCatalogId, resolvedExtra, config);
+            return { metasDetailed };
         }
 
         let endpoint = null;
@@ -6532,6 +6570,13 @@ app.get('/manifest.json', async (req, res) => {
         // Default: Show all
         filteredCatalogs = fullCatalogs;
     }
+
+    [LAST_VIDEOS_CATALOG_ID, CALENDAR_VIDEOS_CATALOG_ID].forEach(catalogId => {
+        const specialCatalog = fullCatalogs.find(catalog => catalog.id === catalogId && catalog.type === "series");
+        if (specialCatalog) {
+            filteredCatalogs.push(specialCatalog);
+        }
+    });
 
     // Deduplicate just in case
     filteredCatalogs = [...new Set(filteredCatalogs)];
