@@ -92,6 +92,31 @@ async function fetchCinemetaSpecialSeriesCatalogMetas(catalogId, requestedIds) {
     return [];
 }
 
+function pickVideosByReferenceIds(videos, referenceVideos, fallbackCatalogId) {
+    const availableVideos = Array.isArray(videos) ? videos : [];
+    const requestedReferenceVideos = Array.isArray(referenceVideos) ? referenceVideos : [];
+    if (availableVideos.length === 0) return [];
+
+    if (requestedReferenceVideos.length === 0) {
+        return selectSeriesVideosForSpecialCatalog(availableVideos, fallbackCatalogId);
+    }
+
+    const videoById = new Map(
+        availableVideos
+            .filter(video => video && typeof video === "object" && String(video.id || "").trim())
+            .map(video => [String(video.id), video])
+    );
+
+    const selected = [];
+    requestedReferenceVideos.forEach(referenceVideo => {
+        const referenceId = String(referenceVideo && referenceVideo.id || "").trim();
+        if (!referenceId || !videoById.has(referenceId)) return;
+        selected.push(videoById.get(referenceId));
+    });
+
+    return selected.length > 0 ? selected : selectSeriesVideosForSpecialCatalog(availableVideos, fallbackCatalogId);
+}
+
 function normalizeImdbId(imdbId) {
     if (!imdbId) return null;
     const imdbStr = String(imdbId).trim();
@@ -5718,9 +5743,11 @@ async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = nu
     if (requestedIds.length === 0) return [];
 
     const cinemetaMetas = await fetchCinemetaSpecialSeriesCatalogMetas(catalogId, requestedIds);
-    if (cinemetaMetas.length > 0) {
-        return cinemetaMetas;
-    }
+    const cinemetaMetaMap = new Map(
+        cinemetaMetas
+            .filter(meta => meta && typeof meta === "object" && String(meta.id || "").trim())
+            .map(meta => [String(meta.id), meta])
+    );
 
     const metas = await mapWithConcurrency(requestedIds, 4, async seriesId => {
         const cachedMeta = await getCachedMetaForId("series", seriesId, config);
@@ -5729,7 +5756,12 @@ async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = nu
         }
 
         const alignedMeta = alignMetaIdentity(cachedMeta, seriesId);
-        const selectedVideos = selectSeriesVideosForSpecialCatalog(alignedMeta.videos, catalogId);
+        const cinemetaMeta = cinemetaMetaMap.get(seriesId);
+        const selectedVideos = pickVideosByReferenceIds(
+            alignedMeta.videos,
+            cinemetaMeta && Array.isArray(cinemetaMeta.videos) ? cinemetaMeta.videos : [],
+            catalogId
+        );
         if (selectedVideos.length === 0) return null;
 
         return {
