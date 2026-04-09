@@ -5638,12 +5638,23 @@ async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = nu
     if (requestedIds.length === 0) return [];
 
     const metas = await mapWithConcurrency(requestedIds, 4, async seriesId => {
-        const meta = await getCachedMetaForId("series", seriesId, config);
-        if (!meta || !Array.isArray(meta.videos) || meta.videos.length === 0) {
+        // Fetch accurate meta (primarily from TMDB) for correct release dates and episode list
+        const accurateMeta = await getCachedMetaForId("series", seriesId, config);
+        if (!accurateMeta || !Array.isArray(accurateMeta.videos) || accurateMeta.videos.length === 0) {
             return null;
         }
 
-        const alignedMeta = alignMetaIdentity(meta, seriesId);
+        // Fetch Cinemeta meta for the "look and feel" posters/backdrops/descriptions
+        const cinemetaMeta = await fetchCinemetaMeta(seriesId, "series");
+
+        // Hybrid merge: use Cinemeta for aesthetics but TMDB for correct episode info
+        const baseMeta = cinemetaMeta || accurateMeta;
+        const hybridMeta = {
+            ...baseMeta,
+            videos: accurateMeta.videos
+        };
+
+        const alignedMeta = alignMetaIdentity(hybridMeta, seriesId);
         const selectedVideos = selectSeriesVideosForSpecialCatalog(alignedMeta.videos, catalogId);
         if (selectedVideos.length === 0) return null;
 
