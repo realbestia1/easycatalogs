@@ -65,6 +65,33 @@ async function getImdbRating(imdbId, type) {
     return cinemetaMeta && cinemetaMeta.imdbRating ? cinemetaMeta.imdbRating : null;
 }
 
+async function fetchCinemetaSpecialSeriesCatalogMetas(catalogId, requestedIds) {
+    const normalizedIds = normalizeExtraIdList(requestedIds).slice(0, 100);
+    if (normalizedIds.length === 0) return [];
+
+    const normalizedCatalogId = catalogId === CALENDAR_VIDEOS_CATALOG_ID || catalogId === CINEMETA_CALENDAR_VIDEOS_CATALOG_ID
+        ? CINEMETA_CALENDAR_VIDEOS_CATALOG_ID
+        : CINEMETA_LAST_VIDEOS_CATALOG_ID;
+    const extraName = normalizedCatalogId === CINEMETA_CALENDAR_VIDEOS_CATALOG_ID
+        ? CALENDAR_VIDEOS_EXTRA_NAME
+        : LAST_VIDEOS_EXTRA_NAME;
+
+    try {
+        const response = await fetch(`https://v3-cinemeta.strem.io/catalog/series/${normalizedCatalogId}/${extraName}=${encodeURIComponent(normalizedIds.join(","))}.json`);
+        const payload = await response.json();
+        if (payload && Array.isArray(payload.metasDetailed)) {
+            return payload.metasDetailed;
+        }
+        if (payload && Array.isArray(payload.metas)) {
+            return payload.metas;
+        }
+    } catch (error) {
+        console.warn(`[Easy Catalogs] Error fetching Cinemeta ${normalizedCatalogId}: ${error.message}`);
+    }
+
+    return [];
+}
+
 function normalizeImdbId(imdbId) {
     if (!imdbId) return null;
     const imdbStr = String(imdbId).trim();
@@ -5677,6 +5704,11 @@ async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = nu
 
     const requestedIds = normalizeExtraIdList(extra && extra[extraName]).slice(0, 100);
     if (requestedIds.length === 0) return [];
+
+    const cinemetaMetas = await fetchCinemetaSpecialSeriesCatalogMetas(catalogId, requestedIds);
+    if (cinemetaMetas.length > 0) {
+        return cinemetaMetas;
+    }
 
     const metas = await mapWithConcurrency(requestedIds, 4, async seriesId => {
         const cachedMeta = await getCachedMetaForId("series", seriesId, config);
