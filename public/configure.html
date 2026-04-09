@@ -926,6 +926,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
             gap: 1rem;
             padding: 0.9rem 1rem;
             border-radius: 0.85rem;
@@ -953,6 +954,24 @@
             font-size: 0.8rem;
             color: var(--text-secondary);
             line-height: 1.35;
+        }
+
+        #easyProxySettings {
+            width: 100%;
+            margin-top: 0.7rem;
+            padding: 0.85rem;
+            border-radius: 0.8rem;
+            border: 1px dashed var(--border-color);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .nested-settings-title {
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            margin-bottom: 0.65rem;
+            font-weight: 600;
         }
 
         label {
@@ -1951,7 +1970,7 @@
                             <div class="input-group" style="margin-top: 1rem;">
                                 <div class="feature-toggle-row">
                                     <label class="feature-toggle-copy" for="returnStreams">
-                                        <div class="feature-toggle-title">Return Streams</div>
+                                        <div class="feature-toggle-title">Return Streams da EasyStreams</div>
                                         <div class="feature-toggle-hint">Attiva o disattiva il ritorno degli stream da
                                             Easy Streams. Le opzioni qui sotto valgono solo per Easy Streams.</div>
                                     </label>
@@ -1959,32 +1978,33 @@
                                         <input type="checkbox" id="returnStreams" checked>
                                         <span class="slider"></span>
                                     </label>
-                                </div>
-                            </div>
-                            <div id="easyProxySettings" style="display: none;">
-                                <div class="input-group" style="margin-top: 1rem;">
-                                    <label for="easyProxyUrl">EasyProxy URL per Easy Streams (opzionale)</label>
-                                    <input type="url" id="easyProxyUrl" placeholder="https://your-proxy.example.com">
-                                    <div class="input-hint">Usato solo per Easy Streams. Non influisce sui cataloghi di Easy Catalogs o sui cataloghi custom.</div>
-                                </div>
-                                <div class="input-group">
-                                    <label for="easyProxyPassword">EasyProxy Password per Easy Streams (opzionale)</label>
-                                    <input type="password" id="easyProxyPassword" placeholder="Password API del proxy">
-                                    <div class="input-hint">Usata solo da Easy Streams come configurazione del manifest.</div>
-                                </div>
-                                <div class="input-group">
-                                    <label>Addon Stream Custom (opzionale)</label>
-                                    <div class="addon-stream-summary">
-                                        <div class="addon-stream-summary-copy">
-                                            <div class="addon-stream-summary-title">Addon esterni per gli stream</div>
-                                            <div class="addon-stream-summary-text" id="customStreamAddonsSummary">Nessun addon custom configurato.</div>
+                                    <div id="easyProxySettings" style="display: none;">
+                                        <div class="nested-settings-title">Impostazioni EasyStreams</div>
+                                        <div class="input-group">
+                                            <label for="easyProxyUrl">EasyProxy URL per Easy Streams (opzionale)</label>
+                                            <input type="url" id="easyProxyUrl" placeholder="https://your-proxy.example.com">
+                                            <div class="input-hint">Usato solo per Easy Streams. Non influisce sui cataloghi di Easy Catalogs o sui cataloghi custom.</div>
                                         </div>
-                                        <div class="addon-stream-actions">
-                                            <button type="button" class="catalog-action-btn is-primary" id="open-custom-stream-addons-modal-btn">Gestisci addon</button>
+                                        <div class="input-group">
+                                            <label for="easyProxyPassword">EasyProxy Password per Easy Streams (opzionale)</label>
+                                            <input type="password" id="easyProxyPassword" placeholder="Password API del proxy">
+                                            <div class="input-hint">Usata solo da Easy Streams come configurazione del manifest.</div>
                                         </div>
                                     </div>
-                                    <div class="input-hint">Apri il pannello dedicato per aggiungere, modificare o rimuovere gli addon stream custom.</div>
                                 </div>
+                            </div>
+                            <div class="input-group" style="margin-top: 1rem;">
+                                <label>Addon Stream Custom (opzionale)</label>
+                                <div class="addon-stream-summary">
+                                    <div class="addon-stream-summary-copy">
+                                        <div class="addon-stream-summary-title">Addon esterni per gli stream</div>
+                                        <div class="addon-stream-summary-text" id="customStreamAddonsSummary">Nessun addon custom configurato.</div>
+                                    </div>
+                                    <div class="addon-stream-actions">
+                                        <button type="button" class="catalog-action-btn is-primary" id="open-custom-stream-addons-modal-btn">Gestisci addon</button>
+                                    </div>
+                                </div>
+                                <div class="input-hint">Apri il pannello dedicato per aggiungere, modificare o rimuovere gli addon stream custom.</div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
                                 <label>Addon Cataloghi Custom (opzionale)</label>
