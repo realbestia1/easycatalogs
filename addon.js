@@ -1552,7 +1552,7 @@ const KITSU_TTL_SECONDS = {
 
 function getTmdbApiKey(config = null) {
     const resolvedConfig = getRequestConfig(config);
-    
+
     // First priority: Try to get it from erdbConfig
     const erdbCfg = getErdbConfig(resolvedConfig);
     if (erdbCfg && erdbCfg.rawConfig && erdbCfg.rawConfig.tmdbKey) {
@@ -5151,7 +5151,7 @@ const PROVIDERS_SERIES_ONLY = new Set(["Discovery+"]);
 
 const manifest = {
     id: "org.bestia.easycatalogs",
-    version: "1.0.57",
+    version: "1.0.58",
     name: "Easy Catalogs",
     description: "Easy Catalogs per Stremio",
     behaviorHints: {
