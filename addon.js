@@ -99,6 +99,15 @@ function normalizeImdbId(imdbId) {
     return imdbStr.toLowerCase().startsWith("tt") ? imdbStr : `tt${imdbStr}`;
 }
 
+function normalizeSeriesMetaRequestId(type, id) {
+    const normalizedType = String(type || "").trim();
+    const normalizedId = String(id || "").trim();
+    if (normalizedType !== "series" || !normalizedId) return normalizedId;
+
+    const episodeMatch = normalizedId.match(/^((?:tt\d+|tmdb:\d+|kitsu:[^:]+)):\d+:\d+$/i);
+    return episodeMatch ? episodeMatch[1] : normalizedId;
+}
+
 function slugify(value) {
     return String(value || "")
         .normalize("NFKD")
@@ -5635,6 +5644,8 @@ function getMetaCacheKey(type, id, config = null) {
 }
 
 async function buildMetaForId(type, id, config = null) {
+    id = normalizeSeriesMetaRequestId(type, id);
+
     if (id.startsWith("kitsu:")) {
         return buildMetaForKitsuId(type, id, config);
     }
@@ -5671,6 +5682,7 @@ async function buildMetaForId(type, id, config = null) {
 }
 
 async function getCachedMetaForId(type, id, config = null) {
+    id = normalizeSeriesMetaRequestId(type, id);
     const cacheKey = getMetaCacheKey(type, id, config);
     const metaTtl = type === "movie" ? CACHE_TTL_SECONDS.metaMovie : CACHE_TTL_SECONDS.metaSeries;
 
@@ -5734,7 +5746,8 @@ builder.defineMetaHandler(async ({ type, id }) => {
     console.log(`[Easy Catalogs] Meta Request: type=${type} id=${id}`);
 
     const config = getRequestConfig();
-    const meta = await getCachedMetaForId(type, id, config);
+    const normalizedId = normalizeSeriesMetaRequestId(type, id);
+    const meta = await getCachedMetaForId(type, normalizedId, config);
     return meta ? { meta } : { meta: {} };
 });
 
