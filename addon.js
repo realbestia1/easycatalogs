@@ -5613,7 +5613,15 @@ builder.defineMetaHandler(async ({ type, id }) => {
     const config = getRequestConfig();
     const normalizedId = normalizeSeriesMetaRequestId(type, id);
     const meta = await getCachedMetaForId(type, normalizedId, config);
-    return meta ? { meta } : { meta: {} };
+    
+    if (!meta) {
+        console.warn(`[Easy Catalogs] Meta NOT found: type=${type} id=${id} (normalized=${normalizedId})`);
+        return { meta: {} };
+    }
+
+    // Align metadata identity to ensure Stremio accepts the response
+    const alignedMeta = alignMetaIdentity(meta, id);
+    return { meta: alignedMeta };
 });
 
 async function transformToMeta(item, type, config = null, options = {}) {
@@ -5637,11 +5645,9 @@ async function transformToMeta(item, type, config = null, options = {}) {
             }
         }
     } else if (!isMovie) {
-        if (item.next_episode_to_air) {
-            exactReleaseDate = item.next_episode_to_air.air_date;
-        } else if (item.last_air_date) {
-            exactReleaseDate = item.last_air_date;
-        }
+        // ALWAYS use first_air_date as the primary release date for the series meta object
+        // Stremio uses this to identify the series year and status
+        exactReleaseDate = item.first_air_date || item.last_air_date;
     }
 
     const formattedDate = exactReleaseDate ? exactReleaseDate.split('-').reverse().join('/') : null;
