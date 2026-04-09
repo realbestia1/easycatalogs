@@ -5154,6 +5154,7 @@ const manifest = {
     name: "Easy Catalogs",
     description: "Easy Catalogs per Stremio",
     behaviorHints: {
+        configurable: true,
         newEpisodeNotifications: true
     },
     resources: [
