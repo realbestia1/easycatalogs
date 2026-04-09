@@ -21,8 +21,10 @@ const NEGATIVE_CACHE_MARKER = "__negative_cache__";
 const TOP10_GLOBAL_CATALOG_ID = "top10_italia";
 const TOP10_MOVIE_CONFIG_ID = "top10_italia_movie";
 const TOP10_SERIES_CONFIG_ID = "top10_italia_series";
-const LAST_VIDEOS_CATALOG_ID = "lastVideosIds";
-const CALENDAR_VIDEOS_CATALOG_ID = "calendarVideosIds";
+const LAST_VIDEOS_CATALOG_ID = "last-videos";
+const CALENDAR_VIDEOS_CATALOG_ID = "calendar-videos";
+const LEGACY_LAST_VIDEOS_CATALOG_ID = "lastVideosIds";
+const LEGACY_CALENDAR_VIDEOS_CATALOG_ID = "calendarVideosIds";
 const LAST_VIDEOS_EXTRA_NAME = "lastVideosIds";
 const CALENDAR_VIDEOS_EXTRA_NAME = "calendarVideosIds";
 const LAST_VIDEOS_ITEMS_LIMIT = 20;
@@ -143,7 +145,7 @@ function selectSeriesVideosForSpecialCatalog(videos, catalogId) {
     const orderedVideos = getOrderedSeriesVideos(videos);
     if (orderedVideos.length === 0) return [];
 
-    if (catalogId === LAST_VIDEOS_CATALOG_ID) {
+    if (catalogId === LAST_VIDEOS_CATALOG_ID || catalogId === LEGACY_LAST_VIDEOS_CATALOG_ID) {
         const now = Date.now();
         const standardEpisodes = orderedVideos.filter(isStandardEpisodeVideo);
         const airedStandardEpisodes = standardEpisodes.filter(video => {
@@ -156,7 +158,7 @@ function selectSeriesVideosForSpecialCatalog(videos, catalogId) {
         return selectedPool.slice(-LAST_VIDEOS_ITEMS_LIMIT);
     }
 
-    if (catalogId === CALENDAR_VIDEOS_CATALOG_ID) {
+    if (catalogId === CALENDAR_VIDEOS_CATALOG_ID || catalogId === LEGACY_CALENDAR_VIDEOS_CATALOG_ID) {
         const datedVideos = orderedVideos.filter(video => parseVideoReleaseTimestamp(video) !== null);
         const selectedPool = datedVideos.length > 0 ? datedVideos : orderedVideos;
         return selectedPool.slice(-CALENDAR_VIDEOS_ITEMS_LIMIT);
@@ -212,6 +214,13 @@ function shouldReturnStreams(config = null) {
     }
 
     return true;
+}
+
+function isSpecialSeriesCatalogId(catalogId) {
+    return catalogId === LAST_VIDEOS_CATALOG_ID ||
+        catalogId === CALENDAR_VIDEOS_CATALOG_ID ||
+        catalogId === LEGACY_LAST_VIDEOS_CATALOG_ID ||
+        catalogId === LEGACY_CALENDAR_VIDEOS_CATALOG_ID;
 }
 
 function normalizeEasyProxyUrl(value) {
@@ -5623,9 +5632,11 @@ async function getCachedMetaForId(type, id, config = null) {
 }
 
 async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = null) {
-    const extraName = catalogId === LAST_VIDEOS_CATALOG_ID
+    const extraName = (catalogId === LAST_VIDEOS_CATALOG_ID || catalogId === LEGACY_LAST_VIDEOS_CATALOG_ID)
         ? LAST_VIDEOS_EXTRA_NAME
-        : (catalogId === CALENDAR_VIDEOS_CATALOG_ID ? CALENDAR_VIDEOS_EXTRA_NAME : "");
+        : ((catalogId === CALENDAR_VIDEOS_CATALOG_ID || catalogId === LEGACY_CALENDAR_VIDEOS_CATALOG_ID)
+            ? CALENDAR_VIDEOS_EXTRA_NAME
+            : "");
     if (!extraName) return [];
 
     const requestedIds = normalizeExtraIdList(extra && extra[extraName]).slice(0, 100);
@@ -5913,7 +5924,7 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
         }
 
-        if (type === "series" && (sourceCatalogId === LAST_VIDEOS_CATALOG_ID || sourceCatalogId === CALENDAR_VIDEOS_CATALOG_ID)) {
+        if (type === "series" && isSpecialSeriesCatalogId(sourceCatalogId)) {
             const metasDetailed = await fetchSpecialSeriesCatalogMetas(sourceCatalogId, resolvedExtra, config);
             return { metasDetailed };
         }
