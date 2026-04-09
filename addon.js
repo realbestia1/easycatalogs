@@ -21,6 +21,12 @@ const NEGATIVE_CACHE_MARKER = "__negative_cache__";
 const TOP10_GLOBAL_CATALOG_ID = "top10_italia";
 const TOP10_MOVIE_CONFIG_ID = "top10_italia_movie";
 const TOP10_SERIES_CONFIG_ID = "top10_italia_series";
+const LAST_VIDEOS_CATALOG_ID = "lastVideosIds";
+const CALENDAR_VIDEOS_CATALOG_ID = "calendarVideosIds";
+const LAST_VIDEOS_EXTRA_NAME = "lastVideosIds";
+const CALENDAR_VIDEOS_EXTRA_NAME = "calendarVideosIds";
+const LAST_VIDEOS_ITEMS_LIMIT = 20;
+const CALENDAR_VIDEOS_ITEMS_LIMIT = 10;
 const HOME_TMDB_MAX_PAGES = Number.parseInt(process.env.TMDB_HOME_MAX_PAGES || "20", 10);
 const HOME_TMDB_PAGE_CAP = Number.isFinite(HOME_TMDB_MAX_PAGES) && HOME_TMDB_MAX_PAGES > 0
     ? HOME_TMDB_MAX_PAGES
@@ -89,6 +95,74 @@ function normalizeExtraIdList(rawValue) {
     });
 
     return normalized;
+}
+
+function parseVideoReleaseTimestamp(video) {
+    if (!video || !video.released) return null;
+    const timestamp = Date.parse(video.released);
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function compareVideosByRelease(left, right) {
+    const leftTimestamp = parseVideoReleaseTimestamp(left);
+    const rightTimestamp = parseVideoReleaseTimestamp(right);
+    const normalizedLeftTimestamp = leftTimestamp === null ? Number.NEGATIVE_INFINITY : leftTimestamp;
+    const normalizedRightTimestamp = rightTimestamp === null ? Number.NEGATIVE_INFINITY : rightTimestamp;
+
+    if (normalizedLeftTimestamp !== normalizedRightTimestamp) {
+        return normalizedLeftTimestamp - normalizedRightTimestamp;
+    }
+
+    const leftSeason = Number.parseInt(String(left && left.season || ""), 10);
+    const rightSeason = Number.parseInt(String(right && right.season || ""), 10);
+    if (Number.isFinite(leftSeason) && Number.isFinite(rightSeason) && leftSeason !== rightSeason) {
+        return leftSeason - rightSeason;
+    }
+
+    const leftEpisode = Number.parseInt(String(left && (left.episode || left.number) || ""), 10);
+    const rightEpisode = Number.parseInt(String(right && (right.episode || right.number) || ""), 10);
+    if (Number.isFinite(leftEpisode) && Number.isFinite(rightEpisode) && leftEpisode !== rightEpisode) {
+        return leftEpisode - rightEpisode;
+    }
+
+    return String(left && left.id || "").localeCompare(String(right && right.id || ""));
+}
+
+function getOrderedSeriesVideos(videos) {
+    return (Array.isArray(videos) ? videos : [])
+        .filter(video => video && typeof video === "object" && String(video.id || "").trim())
+        .sort(compareVideosByRelease);
+}
+
+function isStandardEpisodeVideo(video) {
+    const seasonNumber = Number.parseInt(String(video && video.season || ""), 10);
+    return !Number.isFinite(seasonNumber) || seasonNumber > 0;
+}
+
+function selectSeriesVideosForSpecialCatalog(videos, catalogId) {
+    const orderedVideos = getOrderedSeriesVideos(videos);
+    if (orderedVideos.length === 0) return [];
+
+    if (catalogId === LAST_VIDEOS_CATALOG_ID) {
+        const now = Date.now();
+        const standardEpisodes = orderedVideos.filter(isStandardEpisodeVideo);
+        const airedStandardEpisodes = standardEpisodes.filter(video => {
+            const releasedAt = parseVideoReleaseTimestamp(video);
+            return releasedAt !== null && releasedAt <= now;
+        });
+        const selectedPool = airedStandardEpisodes.length > 0
+            ? airedStandardEpisodes
+            : (standardEpisodes.length > 0 ? standardEpisodes : orderedVideos);
+        return selectedPool.slice(-LAST_VIDEOS_ITEMS_LIMIT);
+    }
+
+    if (catalogId === CALENDAR_VIDEOS_CATALOG_ID) {
+        const datedVideos = orderedVideos.filter(video => parseVideoReleaseTimestamp(video) !== null);
+        const selectedPool = datedVideos.length > 0 ? datedVideos : orderedVideos;
+        return selectedPool.slice(-CALENDAR_VIDEOS_ITEMS_LIMIT);
+    }
+
+    return orderedVideos;
 }
 
 function alignMetaIdentity(meta, requestedId) {
@@ -2557,7 +2631,7 @@ async function fetchTop10ChartEntriesFromGraphql(options = {}) {
     const objectType = String(options.objectType || "").trim().toUpperCase();
     if (!objectType) return [];
 
-    const cacheKey = `top10:graphql:v2:${objectType}:${TOP10_SOURCE_COUNTRY}`;
+    const cacheKey = `top10:graphql:v1:${objectType}:${TOP10_SOURCE_COUNTRY}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
@@ -2666,7 +2740,7 @@ async function fetchTop10PopularEntriesFromGraphql(options = {}) {
     const packages = uniqueNonEmptyStrings(options.packages || []);
     if (!objectType || packages.length === 0) return [];
 
-    const cacheKey = `top10:graphql:popular:v2:${objectType}:${TOP10_SOURCE_COUNTRY}:${packages.join(",")}`;
+    const cacheKey = `top10:graphql:popular:v1:${objectType}:${TOP10_SOURCE_COUNTRY}:${packages.join(",")}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
@@ -2771,7 +2845,7 @@ async function fetchTop10ChartEntriesFromPage(pageUrl, options = {}) {
     const requiresPackages = options.requiresPackages === true;
     if (!pageUrl || !objectType) return [];
 
-    const cacheKey = `top10:charts:v2:${requiresPackages ? "provider" : "global"}:${objectType}:${pageUrl}`;
+    const cacheKey = `top10:charts:v1:${requiresPackages ? "provider" : "global"}:${objectType}:${pageUrl}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
@@ -2791,7 +2865,7 @@ async function fetchTop10ChartEntriesFromPage(pageUrl, options = {}) {
             const packages = extractTop10PackagesFromPopularTitles(state);
             if (response.ok && packages.length > 0) {
                 await cache.set(
-                    `top10:provider-packages:v2:${pageUrl}`,
+                    `top10:provider-packages:v1:${pageUrl}`,
                     packages,
                     withTtlJitter(CACHE_TTL_SECONDS.top10)
                 );
@@ -2813,7 +2887,7 @@ async function fetchTop10ChartEntriesFromPage(pageUrl, options = {}) {
 async function fetchTop10ProviderPackagesFromPage(pageUrl) {
     if (!pageUrl) return [];
 
-    const cacheKey = `top10:provider-packages:v2:${pageUrl}`;
+    const cacheKey = `top10:provider-packages:v1:${pageUrl}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (Array.isArray(cached)) return cached;
@@ -2853,7 +2927,7 @@ async function fetchTop10ExternalIdsFromPage(fullPath, jwId) {
     const pageUrl = buildTop10PageUrl(fullPath);
     if (!pageUrl) return { imdbId: null, tmdbId: null };
 
-    const cacheKey = `top10:externalids:v2:${jwId || fullPath}`;
+    const cacheKey = `top10:externalids:v1:${jwId || fullPath}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return { imdbId: null, tmdbId: null };
     if (cached && typeof cached === "object") {
@@ -2996,7 +3070,7 @@ async function resolveTmdbIdFromTop10Entry(entry, requestedType, config = null) 
     ]);
 
     const cacheKey = titleCandidates.length > 0
-        ? `top10:tmdb-lookup:v2:${requestedType}:${normalizeMatchTitle(titleCandidates[0])}:${expectedYear || ""}:${normalizeMatchTitle(slugTitle)}`
+        ? `top10:tmdb-lookup:v1:${requestedType}:${normalizeMatchTitle(titleCandidates[0])}:${expectedYear || ""}:${normalizeMatchTitle(slugTitle)}`
         : null;
 
     const directTmdbId = normalizeTop10TmdbId(entry && entry.tmdbId);
@@ -3101,7 +3175,7 @@ async function fetchTop10CatalogMetas(catalogId, requestedType, extra = {}, conf
     const configHash = config && typeof config === "object" && Object.keys(config).length > 0
         ? JSON.stringify(config)
         : "default";
-    const cacheKey = `top10:catalog:v8:${normalizedCatalogId}:${requestedType}:${configHash}`;
+    const cacheKey = `top10:catalog:v7:${normalizedCatalogId}:${requestedType}:${configHash}`;
     const cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return [];
     if (cached) return cached;
@@ -3925,7 +3999,7 @@ async function fetchKitsuAnimeById(kitsuId) {
     const normalizedKitsuId = normalizeKitsuId(kitsuId);
     if (!normalizedKitsuId) return null;
 
-    const cacheKey = `kitsu:anime:v3:${normalizedKitsuId}`;
+    const cacheKey = `kitsu:anime:v2:${normalizedKitsuId}`;
     let cached = await cache.get(cacheKey);
     if (isNegativeCache(cached)) return null;
     if (cached) {
@@ -4827,7 +4901,7 @@ async function fetchKitsuCatalogMetas(catalogId, requestedType, extra = {}, conf
     const erdbTypesKey = resolvedConfig.erdbTypes && typeof resolvedConfig.erdbTypes === "object"
         ? resolvedConfig.erdbTypes
         : {};
-    const cacheKey = `kitsu:catalog:v24:${normalizedCatalogId}:${JSON.stringify({
+    const cacheKey = `kitsu:catalog:v23:${normalizedCatalogId}:${JSON.stringify({
         skip,
         search,
         discover,
@@ -5228,6 +5302,26 @@ const fullCatalogs = [
         id: "tmdb.series.search",
         name: "Ricerca TMDB",
         extra: [{ name: "search", isRequired: true }]
+    },
+    {
+        type: "series",
+        id: LAST_VIDEOS_CATALOG_ID,
+        name: "Last videos",
+        extra: [{
+            name: LAST_VIDEOS_EXTRA_NAME,
+            isRequired: true,
+            optionsLimit: 100
+        }]
+    },
+    {
+        type: "series",
+        id: CALENDAR_VIDEOS_CATALOG_ID,
+        name: "Calendar videos",
+        extra: [{
+            name: CALENDAR_VIDEOS_EXTRA_NAME,
+            isRequired: true,
+            optionsLimit: 100
+        }]
     }
 ];
 
@@ -5465,7 +5559,7 @@ builder.defineStreamHandler(async ({ type, id }) => {
 function getMetaCacheKey(type, id, config = null) {
     const resolvedConfig = getRequestConfig(config);
     const configHash = Object.keys(resolvedConfig).length > 0 ? JSON.stringify(resolvedConfig) : "default";
-    return `meta_v22:${type}:${id}:${configHash}`;
+    return `meta_v23${type}:${id}:${configHash}`;
 }
 
 async function buildMetaForId(type, id, config = null) {
@@ -5515,9 +5609,8 @@ async function getCachedMetaForId(type, id, config = null) {
     try {
         const meta = await buildMetaForId(type, id, config);
         if (meta) {
-            const alignedMeta = alignMetaIdentity(meta, id);
-            await cache.set(cacheKey, alignedMeta, withTtlJitter(metaTtl));
-            return alignedMeta;
+            await cache.set(cacheKey, meta, withTtlJitter(metaTtl));
+            return meta;
         }
 
         await cache.set(cacheKey, createNegativeCache("meta_not_found"), NEGATIVE_CACHE_TTL_SECONDS);
@@ -5529,6 +5622,33 @@ async function getCachedMetaForId(type, id, config = null) {
     return null;
 }
 
+async function fetchSpecialSeriesCatalogMetas(catalogId, extra = {}, config = null) {
+    const extraName = catalogId === LAST_VIDEOS_CATALOG_ID
+        ? LAST_VIDEOS_EXTRA_NAME
+        : (catalogId === CALENDAR_VIDEOS_CATALOG_ID ? CALENDAR_VIDEOS_EXTRA_NAME : "");
+    if (!extraName) return [];
+
+    const requestedIds = normalizeExtraIdList(extra && extra[extraName]).slice(0, 100);
+    if (requestedIds.length === 0) return [];
+
+    const metas = await mapWithConcurrency(requestedIds, 4, async seriesId => {
+        const cachedMeta = await getCachedMetaForId("series", seriesId, config);
+        if (!cachedMeta || !Array.isArray(cachedMeta.videos) || cachedMeta.videos.length === 0) {
+            return null;
+        }
+
+        const alignedMeta = alignMetaIdentity(cachedMeta, seriesId);
+        const selectedVideos = selectSeriesVideosForSpecialCatalog(alignedMeta.videos, catalogId);
+        if (selectedVideos.length === 0) return null;
+
+        return {
+            ...alignedMeta,
+            videos: selectedVideos
+        };
+    });
+
+    return metas.filter(Boolean);
+}
 
 // Metadata Handler
 builder.defineMetaHandler(async ({ type, id }) => {
@@ -5791,6 +5911,11 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
         if (isTop10CatalogId(sourceCatalogId)) {
             const metas = await fetchTop10CatalogMetas(sourceCatalogId, type, resolvedExtra, config);
             return { metas: applyLandscapeToMetas(metas, landscapeForCatalog, config) };
+        }
+
+        if (type === "series" && (sourceCatalogId === LAST_VIDEOS_CATALOG_ID || sourceCatalogId === CALENDAR_VIDEOS_CATALOG_ID)) {
+            const metasDetailed = await fetchSpecialSeriesCatalogMetas(sourceCatalogId, resolvedExtra, config);
+            return { metasDetailed };
         }
 
         let endpoint = null;
@@ -6445,6 +6570,13 @@ app.get('/manifest.json', async (req, res) => {
         // Default: Show all
         filteredCatalogs = fullCatalogs;
     }
+
+    [LAST_VIDEOS_CATALOG_ID, CALENDAR_VIDEOS_CATALOG_ID].forEach(catalogId => {
+        const specialCatalog = fullCatalogs.find(catalog => catalog.id === catalogId && catalog.type === "series");
+        if (specialCatalog) {
+            filteredCatalogs.push(specialCatalog);
+        }
+    });
 
     // Deduplicate just in case
     filteredCatalogs = [...new Set(filteredCatalogs)];
