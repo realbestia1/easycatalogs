@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <script src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
     <style>
         :root {
@@ -1166,6 +1166,29 @@
             }
         }
 
+        @media (min-width: 901px) {
+            .setup-step[data-step="selection"] .selection-layout {
+                display: grid;
+                grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+                align-items: start;
+                gap: 1rem;
+                min-height: 0;
+                height: 100%;
+            }
+
+            .setup-step[data-step="selection"] .catalog-nav {
+                grid-template-columns: 1fr;
+                align-content: start;
+                height: fit-content;
+            }
+
+            .setup-step[data-step="selection"] .catalog-pages {
+                min-width: 0;
+                min-height: 0;
+                overflow: hidden;
+            }
+        }
+
         .catalog-nav {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1201,9 +1224,56 @@
             box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.12);
         }
 
+        .landscape-quick-card {
+            margin-top: 1rem;
+            padding: 0.95rem;
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+        }
+
+        .landscape-quick-title {
+            font-size: 1.08rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            letter-spacing: -0.01em;
+        }
+
+        .landscape-quick-subtitle {
+            font-size: 0.88rem;
+            line-height: 1.35;
+            color: var(--text-secondary);
+            margin-bottom: 0.85rem;
+        }
+
+        .landscape-quick-actions {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .landscape-quick-actions .catalog-action-btn {
+            width: 100%;
+            justify-content: center;
+            padding: 0.62rem 0.75rem;
+            font-size: 0.82rem;
+            border-radius: 0.75rem;
+        }
+
+        .selection-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            min-height: 0;
+            flex: 1;
+            height: 100%;
+        }
+
         .catalog-pages {
             flex: 1;
             min-height: 0;
+            overflow: hidden;
+            height: 100%;
         }
 
         .catalog-page {
@@ -1366,6 +1436,43 @@
             border-color: #3f3f46;
         }
 
+        .catalog-item.is-selected {
+            border-color: rgba(139, 92, 246, 0.65);
+            box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.2);
+            background: rgba(139, 92, 246, 0.08);
+        }
+
+        .catalog-item.group-drag-stack {
+            position: relative;
+        }
+
+        .catalog-item.group-drag-stack::before,
+        .catalog-item.group-drag-stack::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(139, 92, 246, 0.42);
+            background: rgba(33, 27, 58, 0.55);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .catalog-item.group-drag-stack::before {
+            transform: translate(6px, 6px) scale(0.985);
+            opacity: 0.8;
+        }
+
+        .catalog-item.group-drag-stack::after {
+            transform: translate(12px, 12px) scale(0.97);
+            opacity: 0.55;
+        }
+
+        .catalog-item.group-drag-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .sortable-ghost {
             opacity: 0.5;
             background: rgba(255, 255, 255, 0.05);
@@ -1401,6 +1508,19 @@
         .drag-handle:active {
             cursor: grabbing;
             color: var(--text-primary);
+        }
+
+        .ordering-select {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ordering-select input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-color);
+            cursor: pointer;
         }
 
         .catalog-info {
@@ -1924,59 +2044,63 @@
                                 </div>
                                 <div id="erdbSettings" style="display: none;">
                                     <div class="nested-settings-title">Impostazioni ERDB</div>
-                            <div class="input-group" id="erdbBaseUrlGroup" style="margin-top: 1rem; display: none;">
-                                <label for="erdbBaseUrl">ERDB Base URL (opzionale)</label>
-                                <input type="text" id="erdbBaseUrl" placeholder="https://easyratingsdb.com">
-                                <div class="input-hint">
-                                    Lascia il valore predefinito oppure imposta un'istanza ERDB self-hosted. Lo slash
-                                    finale viene normalizzato automaticamente.
-                                </div>
-                            </div>
-                            <div class="input-group" id="erdbTypeToggles" style="display: none;">
-                                <label>ERDB Artwork</label>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnablePoster">
-                                        <div class="feature-toggle-title">Poster</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i poster.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnablePoster" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnableBackdrop">
-                                        <div class="feature-toggle-title">Backdrop</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i backdrop.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnableBackdrop" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnableLogo">
-                                        <div class="feature-toggle-title">Logo</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per i logo.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnableLogo" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="feature-toggle-row">
-                                    <label class="feature-toggle-copy" for="erdbEnableThumbnail">
-                                        <div class="feature-toggle-title">Thumbnail</div>
-                                        <div class="feature-toggle-hint">Usa ERDB per le thumbnail degli episodi.</div>
-                                    </label>
-                                    <label class="switch">
-                                        <input type="checkbox" id="erdbEnableThumbnail" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="input-hint">Se un tipo è disattivato, l'addon mantiene l'artwork originale.
-                                </div>
-                            </div>
+                                    <div class="input-group" id="erdbBaseUrlGroup"
+                                        style="margin-top: 1rem; display: none;">
+                                        <label for="erdbBaseUrl">ERDB Base URL (opzionale)</label>
+                                        <input type="text" id="erdbBaseUrl" placeholder="https://easyratingsdb.com">
+                                        <div class="input-hint">
+                                            Lascia il valore predefinito oppure imposta un'istanza ERDB self-hosted. Lo
+                                            slash
+                                            finale viene normalizzato automaticamente.
+                                        </div>
+                                    </div>
+                                    <div class="input-group" id="erdbTypeToggles" style="display: none;">
+                                        <label>ERDB Artwork</label>
+                                        <div class="feature-toggle-row">
+                                            <label class="feature-toggle-copy" for="erdbEnablePoster">
+                                                <div class="feature-toggle-title">Poster</div>
+                                                <div class="feature-toggle-hint">Usa ERDB per i poster.</div>
+                                            </label>
+                                            <label class="switch">
+                                                <input type="checkbox" id="erdbEnablePoster" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="feature-toggle-row">
+                                            <label class="feature-toggle-copy" for="erdbEnableBackdrop">
+                                                <div class="feature-toggle-title">Backdrop</div>
+                                                <div class="feature-toggle-hint">Usa ERDB per i backdrop.</div>
+                                            </label>
+                                            <label class="switch">
+                                                <input type="checkbox" id="erdbEnableBackdrop" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="feature-toggle-row">
+                                            <label class="feature-toggle-copy" for="erdbEnableLogo">
+                                                <div class="feature-toggle-title">Logo</div>
+                                                <div class="feature-toggle-hint">Usa ERDB per i logo.</div>
+                                            </label>
+                                            <label class="switch">
+                                                <input type="checkbox" id="erdbEnableLogo" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="feature-toggle-row">
+                                            <label class="feature-toggle-copy" for="erdbEnableThumbnail">
+                                                <div class="feature-toggle-title">Thumbnail</div>
+                                                <div class="feature-toggle-hint">Usa ERDB per le thumbnail degli
+                                                    episodi.</div>
+                                            </label>
+                                            <label class="switch">
+                                                <input type="checkbox" id="erdbEnableThumbnail" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                        <div class="input-hint">Se un tipo è disattivato, l'addon mantiene l'artwork
+                                            originale.
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
@@ -1994,13 +2118,18 @@
                                         <div class="nested-settings-title">Impostazioni EasyStreams</div>
                                         <div class="input-group">
                                             <label for="easyProxyUrl">EasyProxy URL per Easy Streams (opzionale)</label>
-                                            <input type="url" id="easyProxyUrl" placeholder="https://your-proxy.example.com">
-                                            <div class="input-hint">Usato solo per Easy Streams. Non influisce sui cataloghi di Easy Catalogs o sui cataloghi custom.</div>
+                                            <input type="url" id="easyProxyUrl"
+                                                placeholder="https://your-proxy.example.com">
+                                            <div class="input-hint">Usato solo per Easy Streams. Non influisce sui
+                                                cataloghi di Easy Catalogs o sui cataloghi custom.</div>
                                         </div>
                                         <div class="input-group">
-                                            <label for="easyProxyPassword">EasyProxy Password per Easy Streams (opzionale)</label>
-                                            <input type="password" id="easyProxyPassword" placeholder="Password API del proxy">
-                                            <div class="input-hint">Usata solo da Easy Streams come configurazione del manifest.</div>
+                                            <label for="easyProxyPassword">EasyProxy Password per Easy Streams
+                                                (opzionale)</label>
+                                            <input type="password" id="easyProxyPassword"
+                                                placeholder="Password API del proxy">
+                                            <div class="input-hint">Usata solo da Easy Streams come configurazione del
+                                                manifest.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -2010,23 +2139,28 @@
                                 <div class="addon-stream-summary">
                                     <div class="addon-stream-summary-copy">
                                         <div class="addon-stream-summary-title">Addon esterni per gli stream</div>
-                                        <div class="addon-stream-summary-text" id="customStreamAddonsSummary">Nessun addon custom configurato.</div>
+                                        <div class="addon-stream-summary-text" id="customStreamAddonsSummary">Nessun
+                                            addon custom configurato.</div>
                                     </div>
                                     <div class="addon-stream-actions">
-                                        <button type="button" class="catalog-action-btn is-primary" id="open-custom-stream-addons-modal-btn">Gestisci addon</button>
+                                        <button type="button" class="catalog-action-btn is-primary"
+                                            id="open-custom-stream-addons-modal-btn">Gestisci addon</button>
                                     </div>
                                 </div>
-                                <div class="input-hint">Apri il pannello dedicato per aggiungere, modificare o rimuovere gli addon stream custom.</div>
+                                <div class="input-hint">Apri il pannello dedicato per aggiungere, modificare o rimuovere
+                                    gli addon stream custom.</div>
                             </div>
                             <div class="input-group" style="margin-top: 1rem;">
                                 <label>Addon Cataloghi Custom (opzionale)</label>
                                 <div class="addon-stream-summary">
                                     <div class="addon-stream-summary-copy">
                                         <div class="addon-stream-summary-title">Addon esterni per i cataloghi</div>
-                                        <div class="addon-stream-summary-text" id="customCatalogAddonsSummary">Nessun addon cataloghi configurato.</div>
+                                        <div class="addon-stream-summary-text" id="customCatalogAddonsSummary">Nessun
+                                            addon cataloghi configurato.</div>
                                     </div>
                                     <div class="addon-stream-actions">
-                                        <button type="button" class="catalog-action-btn is-primary" id="open-custom-catalog-addons-modal-btn">Gestisci cataloghi</button>
+                                        <button type="button" class="catalog-action-btn is-primary"
+                                            id="open-custom-catalog-addons-modal-btn">Gestisci cataloghi</button>
                                     </div>
                                 </div>
                             </div>
@@ -2042,11 +2176,31 @@
             <section class="setup-step" id="setup-step-selection" data-step="selection" role="tabpanel">
                 <div class="step-shell">
                     <div class="catalog-list-container">
-                        <div class="list-header">
+                        <div class="selection-layout">
                             <div>
-                                <div class="list-title-row">
-                                    <div class="list-title">Landscape Rapido</div>
-                                    <div class="list-header-actions" aria-label="Azioni rapide landscape">
+                                <div class="catalog-nav" role="tablist" aria-label="Sezioni cataloghi">
+                                    <button class="catalog-nav-btn active" type="button" data-page="top10" role="tab"
+                                        aria-selected="true" aria-controls="catalog-page-top10">
+                                        Cataloghi Top 10
+                                    </button>
+                                    <button class="catalog-nav-btn" type="button" data-page="standard" role="tab"
+                                        aria-selected="false" aria-controls="catalog-page-standard">
+                                        Cataloghi Standard
+                                    </button>
+                                    <button class="catalog-nav-btn" type="button" data-page="anime" role="tab"
+                                        aria-selected="false" aria-controls="catalog-page-anime">
+                                        Cataloghi Anime
+                                    </button>
+                                    <button class="catalog-nav-btn" type="button" data-page="custom" role="tab"
+                                        aria-selected="false" aria-controls="catalog-page-custom">
+                                        Cataloghi Custom
+                                    </button>
+                                </div>
+                                <div class="landscape-quick-card">
+                                    <div class="landscape-quick-title">Landscape Rapido</div>
+                                    <div class="landscape-quick-subtitle">Applica il layout landscape ai cataloghi della
+                                        sezione corrente con un click.</div>
+                                    <div class="landscape-quick-actions" aria-label="Azioni rapide landscape">
                                         <button class="catalog-action-btn" type="button" id="landscape-enable-all-btn">
                                             Attiva Landscape per questi Cataloghi
                                         </button>
@@ -2055,139 +2209,127 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="list-subtitle">Applica il layout landscape ai cataloghi della sezione
-                                    corrente con un click.</div>
                             </div>
-                        </div>
-                        <div class="catalog-nav" role="tablist" aria-label="Sezioni cataloghi">
-                            <button class="catalog-nav-btn active" type="button" data-page="top10" role="tab"
-                                aria-selected="true" aria-controls="catalog-page-top10">
-                                Cataloghi Top 10
-                            </button>
-                            <button class="catalog-nav-btn" type="button" data-page="standard" role="tab"
-                                aria-selected="false" aria-controls="catalog-page-standard">
-                                Cataloghi Standard
-                            </button>
-                            <button class="catalog-nav-btn" type="button" data-page="anime" role="tab"
-                                aria-selected="false" aria-controls="catalog-page-anime">
-                                Cataloghi Anime
-                            </button>
-                            <button class="catalog-nav-btn" type="button" data-page="custom" role="tab"
-                                aria-selected="false" aria-controls="catalog-page-custom">
-                                Cataloghi Custom
-                            </button>
-                        </div>
-                        <div class="catalog-pages">
-                            <section class="catalog-page active" id="catalog-page-top10" data-page="top10"
-                                role="tabpanel">
-                                <div class="list-header">
-                                    <div>
-                                        <div class="list-title-row">
-                                            <div class="list-title">Top 10 Italia</div>
-                                            <div class="list-header-actions"
-                                                aria-label="Azioni rapide cataloghi top 10">
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="top10-enable-all-btn">
-                                                    Attiva Tutti i Cataloghi
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="top10-disable-all-btn">
-                                                    Disattiva Tutti i Cataloghi
-                                                </button>
+                            <div class="catalog-pages">
+                                <section class="catalog-page active" id="catalog-page-top10" data-page="top10"
+                                    role="tabpanel">
+                                    <div class="list-header">
+                                        <div>
+                                            <div class="list-title-row">
+                                                <div class="list-title">Top 10 Italia</div>
+                                                <div class="list-header-actions"
+                                                    aria-label="Azioni rapide cataloghi top 10">
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="top10-enable-all-btn">
+                                                        Attiva Tutti i Cataloghi
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="top10-disable-all-btn">
+                                                        Disattiva Tutti i Cataloghi
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="list-subtitle">Scegli le classifiche Top 10 globali o per
+                                                provider
+                                                da includere nel link.</div>
+                                        </div>
+                                    </div>
+                                    <div id="top10-sortable-list" class="sortable-list">
+                                        <!-- Javascript will populate this -->
+                                    </div>
+                                </section>
+                                <section class="catalog-page" id="catalog-page-standard" data-page="standard"
+                                    role="tabpanel">
+                                    <div class="list-header">
+                                        <div>
+                                            <div class="list-title-row">
+                                                <div class="list-title">Cataloghi Standard</div>
+                                                <div class="list-header-actions"
+                                                    aria-label="Azioni rapide cataloghi standard">
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="standard-enable-non-search-btn">
+                                                        Attiva Tutti i Cataloghi
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="standard-disable-non-search-btn">
+                                                        Disattiva Tutti i Cataloghi
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="standard-set-providers-original-btn">
+                                                        Provider Original
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="standard-set-providers-complete-btn">
+                                                        Provider Completo
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="standard-set-providers-both-btn">
+                                                        Provider Original + Completo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="list-subtitle">Cataloghi generali, ricerca TMDB e provider.
                                             </div>
                                         </div>
-                                        <div class="list-subtitle">Scegli le classifiche Top 10 globali o per provider
-                                            da includere nel link.</div>
                                     </div>
-                                </div>
-                                <div id="top10-sortable-list" class="sortable-list">
-                                    <!-- Javascript will populate this -->
-                                </div>
-                            </section>
-                            <section class="catalog-page" id="catalog-page-standard" data-page="standard"
-                                role="tabpanel">
-                                <div class="list-header">
-                                    <div>
-                                        <div class="list-title-row">
-                                            <div class="list-title">Cataloghi Standard</div>
-                                            <div class="list-header-actions"
-                                                aria-label="Azioni rapide cataloghi standard">
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="standard-enable-non-search-btn">
-                                                    Attiva Tutti i Cataloghi
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="standard-disable-non-search-btn">
-                                                    Disattiva Tutti i Cataloghi
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="standard-set-providers-original-btn">
-                                                    Provider Original
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="standard-set-providers-complete-btn">
-                                                    Provider Completo
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="standard-set-providers-both-btn">
-                                                    Provider Original + Completo
-                                                </button>
+                                    <div id="standard-sortable-list" class="sortable-list">
+                                        <!-- Javascript will populate this -->
+                                    </div>
+                                </section>
+                                <section class="catalog-page" id="catalog-page-anime" data-page="anime" role="tabpanel">
+                                    <div class="list-header">
+                                        <div>
+                                            <div class="list-title-row">
+                                                <div class="list-title">Cataloghi Anime</div>
+                                                <div class="list-header-actions"
+                                                    aria-label="Azioni rapide cataloghi anime">
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="anime-enable-all-btn">
+                                                        Attiva Tutti i Cataloghi
+                                                    </button>
+                                                    <button class="catalog-action-btn" type="button"
+                                                        id="anime-disable-all-btn">
+                                                        Disattiva Tutti i Cataloghi
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="list-subtitle">Scegli la fonte anime oppure mostra entrambe, poi
+                                                attiva i cataloghi da portare nella lista finale.</div>
+                                        </div>
+                                        <div class="anime-source-panel">
+                                            <div class="anime-source-label">Fonte Anime</div>
+                                            <div class="anime-source-toggle" role="radiogroup"
+                                                aria-label="Fonte cataloghi anime">
+                                                <button class="anime-source-option active" type="button"
+                                                    data-anime-source="tmdb" role="radio"
+                                                    aria-checked="true">TMDB</button>
+                                                <button class="anime-source-option" type="button"
+                                                    data-anime-source="kitsu" role="radio"
+                                                    aria-checked="false">Kitsu</button>
+                                                <button class="anime-source-option" type="button"
+                                                    data-anime-source="both" role="radio"
+                                                    aria-checked="false">Entrambi</button>
                                             </div>
                                         </div>
-                                        <div class="list-subtitle">Cataloghi generali, ricerca TMDB e provider.</div>
                                     </div>
-                                </div>
-                                <div id="standard-sortable-list" class="sortable-list">
-                                    <!-- Javascript will populate this -->
-                                </div>
-                            </section>
-                            <section class="catalog-page" id="catalog-page-anime" data-page="anime" role="tabpanel">
-                                <div class="list-header">
-                                    <div>
-                                        <div class="list-title-row">
-                                            <div class="list-title">Cataloghi Anime</div>
-                                            <div class="list-header-actions" aria-label="Azioni rapide cataloghi anime">
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="anime-enable-all-btn">
-                                                    Attiva Tutti i Cataloghi
-                                                </button>
-                                                <button class="catalog-action-btn" type="button"
-                                                    id="anime-disable-all-btn">
-                                                    Disattiva Tutti i Cataloghi
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="list-subtitle">Scegli la fonte anime oppure mostra entrambe, poi
-                                            attiva i cataloghi da portare nella lista finale.</div>
+                                    <div id="anime-sortable-list" class="sortable-list">
+                                        <!-- Javascript will populate this -->
                                     </div>
-                                    <div class="anime-source-panel">
-                                        <div class="anime-source-label">Fonte Anime</div>
-                                        <div class="anime-source-toggle" role="radiogroup"
-                                            aria-label="Fonte cataloghi anime">
-                                            <button class="anime-source-option active" type="button"
-                                                data-anime-source="tmdb" role="radio" aria-checked="true">TMDB</button>
-                                            <button class="anime-source-option" type="button" data-anime-source="kitsu"
-                                                role="radio" aria-checked="false">Kitsu</button>
-                                            <button class="anime-source-option" type="button" data-anime-source="both"
-                                                role="radio" aria-checked="false">Entrambi</button>
+                                </section>
+                                <section class="catalog-page" id="catalog-page-custom" data-page="custom"
+                                    role="tabpanel">
+                                    <div class="list-header">
+                                        <div>
+                                            <div class="list-title">Cataloghi Custom</div>
+                                            <div class="list-subtitle">Cataloghi caricati dai manifest custom aggiunti
+                                                nello step Integrazioni.</div>
                                         </div>
                                     </div>
-                                </div>
-                                <div id="anime-sortable-list" class="sortable-list">
-                                    <!-- Javascript will populate this -->
-                                </div>
-                            </section>
-                            <section class="catalog-page" id="catalog-page-custom" data-page="custom" role="tabpanel">
-                                <div class="list-header">
-                                    <div>
-                                        <div class="list-title">Cataloghi Custom</div>
-                                        <div class="list-subtitle">Cataloghi caricati dai manifest custom aggiunti nello step Integrazioni.</div>
+                                    <div id="custom-catalog-sortable-list" class="sortable-list">
+                                        <!-- Javascript will populate this -->
                                     </div>
-                                </div>
-                                <div id="custom-catalog-sortable-list" class="sortable-list">
-                                    <!-- Javascript will populate this -->
-                                </div>
-                            </section>
+                                </section>
+                            </div>
                         </div>
                         <div class="step-footer">
                             <button type="button" class="btn btn-primary" id="selection-continue-btn">Continua</button>
@@ -2201,9 +2343,17 @@
                     <div class="catalog-list-container">
                         <div class="list-header">
                             <div>
-                                <div class="list-title">Cataloghi Configurati</div>
+                                <div class="list-title-row">
+                                    <div class="list-title">Cataloghi Configurati</div>
+                                    <div class="list-header-actions" aria-label="Azioni selezione ordinamento">
+                                        <button class="catalog-action-btn" type="button"
+                                            id="ordering-clear-selection-btn">Deseleziona</button>
+                                    </div>
+                                </div>
                                 <div class="list-subtitle">Questa e la lista completa dei cataloghi attivi. Trascina per
                                     cambiare posizione.</div>
+                                <div class="list-subtitle">Selezionando più cataloghi puoi spostarli contemporaneamente.
+                                </div>
                             </div>
                         </div>
                         <div id="selected-sortable-list" class="sortable-list">
@@ -2228,16 +2378,19 @@
                     <div class="modal-title" id="custom-stream-addons-modal-title">Addon Stream Custom</div>
                     <div class="modal-subtitle">Ogni addon resta separato e modificabile singolarmente.</div>
                 </div>
-                <button type="button" class="modal-close" id="close-custom-stream-addons-modal-btn" aria-label="Chiudi modal">&times;</button>
+                <button type="button" class="modal-close" id="close-custom-stream-addons-modal-btn"
+                    aria-label="Chiudi modal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="input-group">
                     <label>Manifest URL addon</label>
                     <div id="customStreamAddonsList" class="addon-stream-list"></div>
                     <div class="addon-stream-actions">
-                        <button type="button" class="catalog-action-btn is-primary" id="add-custom-stream-addon-btn">Aggiungi addon</button>
+                        <button type="button" class="catalog-action-btn is-primary"
+                            id="add-custom-stream-addon-btn">Aggiungi addon</button>
                     </div>
-                    <div class="input-hint">Inserisci il manifest completo, ad esempio `https://addon.example.com/manifest.json`.</div>
+                    <div class="input-hint">Inserisci il manifest completo, ad esempio
+                        `https://addon.example.com/manifest.json`.</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2255,20 +2408,24 @@
                     <div class="modal-title" id="custom-catalog-addons-modal-title">Addon Cataloghi Custom</div>
                     <div class="modal-subtitle">Ogni addon cataloghi resta separato e modificabile singolarmente.</div>
                 </div>
-                <button type="button" class="modal-close" id="close-custom-catalog-addons-modal-btn" aria-label="Chiudi modal">&times;</button>
+                <button type="button" class="modal-close" id="close-custom-catalog-addons-modal-btn"
+                    aria-label="Chiudi modal">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="input-group">
                     <label>Manifest URL addon cataloghi</label>
                     <div id="customCatalogAddonsList" class="addon-stream-list"></div>
                     <div class="addon-stream-actions">
-                        <button type="button" class="catalog-action-btn is-primary" id="add-custom-catalog-addon-btn">Aggiungi catalogo</button>
+                        <button type="button" class="catalog-action-btn is-primary"
+                            id="add-custom-catalog-addon-btn">Aggiungi catalogo</button>
                     </div>
-                    <div class="input-hint">Inserisci il manifest completo, ad esempio `https://addon.example.com/manifest.json`, oppure un link `stremio://`.</div>
+                    <div class="input-hint">Inserisci il manifest completo, ad esempio
+                        `https://addon.example.com/manifest.json`, oppure un link `stremio://`.</div>
                 </div>
             </div>
             <div class="modal-footer">
-                <div class="modal-footer-note">I cataloghi dei manifest aggiunti verranno mostrati direttamente dentro Easy Catalogs.</div>
+                <div class="modal-footer-note">I cataloghi dei manifest aggiunti verranno mostrati direttamente dentro
+                    Easy Catalogs.</div>
                 <button type="button" class="btn btn-primary" id="save-custom-catalog-addons-modal-btn">Chiudi</button>
             </div>
         </div>
@@ -2436,6 +2593,8 @@
             custom: []
         };
         let selectedCatalogOrder = [];
+        let orderingSelectedCatalogKeys = new Set();
+        let selectedCatalogSortable = null;
         let selectedAnimeSource = "tmdb";
         let catalogCustomNames = {};
 
@@ -2938,6 +3097,73 @@
                     selectedCatalogOrder.push(key);
                 }
             });
+
+            orderingSelectedCatalogKeys = new Set(
+                [...orderingSelectedCatalogKeys].filter(key => selectedCatalogOrder.includes(key))
+            );
+        }
+
+        function setOrderingSelection(keys = []) {
+            orderingSelectedCatalogKeys = new Set(
+                (Array.isArray(keys) ? keys : []).filter(key => selectedCatalogOrder.includes(key))
+            );
+            applyOrderingSelectionState();
+        }
+
+        function toggleOrderingSelection(key, isSelected) {
+            if (!key || !selectedCatalogOrder.includes(key)) return;
+            if (isSelected) {
+                orderingSelectedCatalogKeys.add(key);
+            } else {
+                orderingSelectedCatalogKeys.delete(key);
+            }
+            applyOrderingSelectionState();
+        }
+
+        function applyOrderingSelectionState() {
+            const list = document.getElementById("selected-sortable-list");
+            if (!list) return;
+
+            Array.from(list.querySelectorAll(".catalog-item")).forEach(item => {
+                const key = item.dataset.key;
+                const isSelected = !!(key && orderingSelectedCatalogKeys.has(key));
+                item.classList.toggle("is-selected", isSelected);
+                const check = item.querySelector(".ordering-select-check");
+                if (check) check.checked = isSelected;
+            });
+
+            if (!selectedCatalogSortable) return;
+            const canSelect = typeof selectedCatalogSortable.select === "function";
+            const canDeselect = typeof selectedCatalogSortable.deselect === "function";
+            if (!canSelect || !canDeselect) return;
+
+            Array.from(list.querySelectorAll(".catalog-item")).forEach(item => {
+                const key = item.dataset.key;
+                const isSelected = !!(key && orderingSelectedCatalogKeys.has(key));
+                if (isSelected) {
+                    selectedCatalogSortable.select(item);
+                } else {
+                    selectedCatalogSortable.deselect(item);
+                }
+            });
+        }
+
+        function moveSelectedOrderingItems(order, selectedKeysSet, targetIndex) {
+            const selectedInOrder = order.filter(key => selectedKeysSet.has(key));
+            if (selectedInOrder.length === 0) return order.slice();
+
+            const remaining = order.filter(key => !selectedKeysSet.has(key));
+            const selectedBeforeTarget = order
+                .slice(0, targetIndex)
+                .filter(key => selectedKeysSet.has(key))
+                .length;
+
+            const insertAt = Math.max(0, Math.min(remaining.length, targetIndex));
+            return [
+                ...remaining.slice(0, insertAt),
+                ...selectedInOrder,
+                ...remaining.slice(insertAt)
+            ];
         }
 
         function getProviderModeLabel(slug) {
@@ -3022,6 +3248,8 @@
             const item = document.createElement("div");
             item.className = "catalog-item";
             item.dataset.key = key;
+            const isSelected = orderingSelectedCatalogKeys.has(key);
+            item.classList.toggle("is-selected", isSelected);
 
             const customName = getCatalogCustomName(details.renameId);
             const displayName = customName || details.defaultName;
@@ -3031,6 +3259,9 @@
                 .join("");
 
             item.innerHTML = `
+                <label class="ordering-select" aria-label="Seleziona catalogo">
+                    <input type="checkbox" class="ordering-select-check" ${isSelected ? "checked" : ""}>
+                </label>
                 <div class="drag-handle">${DRAG_ICON}</div>
                 <div class="catalog-info">
                     <div class="catalog-name-row">
@@ -3042,6 +3273,13 @@
                     </div>
                 </div>
             `;
+
+            const selectionCheck = item.querySelector(".ordering-select-check");
+            if (selectionCheck) {
+                selectionCheck.addEventListener("change", event => {
+                    toggleOrderingSelection(key, event.target.checked);
+                });
+            }
             return item;
         }
 
@@ -3065,6 +3303,8 @@
                     list.appendChild(item);
                 }
             });
+
+            applyOrderingSelectionState();
         }
 
         function refreshSelectedCatalogList() {
@@ -4184,22 +4424,90 @@
         }
 
         function initializeSelectedCatalogSortable() {
-            new Sortable(document.getElementById("selected-sortable-list"), {
+            if (window.Sortable && window.Sortable.MultiDrag && typeof window.Sortable.mount === "function") {
+                window.Sortable.mount(new window.Sortable.MultiDrag());
+            }
+
+            selectedCatalogSortable = new Sortable(document.getElementById("selected-sortable-list"), {
                 animation: 200,
                 handle: ".drag-handle",
                 ghostClass: "sortable-ghost",
                 dragClass: "sortable-drag",
+                multiDrag: true,
+                selectedClass: "is-selected",
+                avoidImplicitDeselect: true,
                 forceFallback: true,
                 fallbackClass: "sortable-drag",
                 fallbackOnBody: true,
                 fallbackTolerance: 0,
                 delay: 0,
                 touchStartThreshold: 0,
+                onSelect: function (evt) {
+                    const key = evt && evt.item && evt.item.dataset ? evt.item.dataset.key : "";
+                    if (!key) return;
+                    orderingSelectedCatalogKeys.add(key);
+                    applyOrderingSelectionState();
+                },
+                onDeselect: function (evt) {
+                    const key = evt && evt.item && evt.item.dataset ? evt.item.dataset.key : "";
+                    if (!key) return;
+                    orderingSelectedCatalogKeys.delete(key);
+                    applyOrderingSelectionState();
+                },
+                onStart: function (evt) {
+                    const draggedElement = evt && evt.item ? evt.item : null;
+                    const draggedKey = draggedElement && draggedElement.dataset ? draggedElement.dataset.key : "";
+                    if (!draggedElement || !draggedKey) return;
+                    if (!orderingSelectedCatalogKeys.has(draggedKey) || orderingSelectedCatalogKeys.size <= 1) return;
+
+                    draggedElement.classList.add("group-drag-stack");
+                    orderingSelectedCatalogKeys.forEach(key => {
+                        if (key === draggedKey) return;
+                        const item = document.querySelector(`#selected-sortable-list .catalog-item[data-key="${CSS.escape(key)}"]`);
+                        if (!item) return;
+                        item.classList.add("group-drag-hidden");
+                    });
+                },
                 onEnd: function (evt) {
-                    const movedItem = selectedCatalogOrder.splice(evt.oldIndex, 1)[0];
-                    if (!movedItem) return;
-                    selectedCatalogOrder.splice(evt.newIndex, 0, movedItem);
-                    renderSelectedCatalogList();
+                    const listForCleanup = document.getElementById("selected-sortable-list");
+                    if (listForCleanup) {
+                        listForCleanup.querySelectorAll(".catalog-item.group-drag-stack").forEach(item => {
+                            item.classList.remove("group-drag-stack");
+                        });
+                        listForCleanup.querySelectorAll(".catalog-item.group-drag-hidden").forEach(item => {
+                            item.classList.remove("group-drag-hidden");
+                        });
+                    }
+
+                    const movedItem = typeof evt.oldIndex === "number"
+                        ? selectedCatalogOrder[evt.oldIndex]
+                        : null;
+                    const hasNativeMultiDragIndices = Array.isArray(evt.oldIndices) && evt.oldIndices.length > 1;
+                    const isFallbackGroupMove = !hasNativeMultiDragIndices &&
+                        movedItem &&
+                        orderingSelectedCatalogKeys.has(movedItem) &&
+                        orderingSelectedCatalogKeys.size > 1 &&
+                        typeof evt.newIndex === "number";
+
+                    if (isFallbackGroupMove) {
+                        selectedCatalogOrder = moveSelectedOrderingItems(
+                            selectedCatalogOrder,
+                            orderingSelectedCatalogKeys,
+                            evt.newIndex
+                        );
+                        renderSelectedCatalogList();
+                        return;
+                    }
+
+                    const list = document.getElementById("selected-sortable-list");
+                    if (!list) return;
+                    selectedCatalogOrder = Array.from(list.querySelectorAll(".catalog-item"))
+                        .map(item => item.dataset.key)
+                        .filter(Boolean);
+                    orderingSelectedCatalogKeys = new Set(
+                        [...orderingSelectedCatalogKeys].filter(key => selectedCatalogOrder.includes(key))
+                    );
+                    applyOrderingSelectionState();
                 }
             });
         }
@@ -4370,6 +4678,13 @@
         document.getElementById("selection-continue-btn").addEventListener("click", () => {
             advanceSelectionStep();
         });
+
+        const orderingClearSelectionButton = document.getElementById("ordering-clear-selection-btn");
+        if (orderingClearSelectionButton) {
+            orderingClearSelectionButton.addEventListener("click", () => {
+                setOrderingSelection([]);
+            });
+        }
 
         document.querySelectorAll("[data-anime-source]").forEach(button => {
             button.addEventListener("click", () => {
