@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 
 <head>
@@ -2548,6 +2548,9 @@
             .filter(catalog => !catalog.id.includes("search"))
             .map(catalog => catalog.id);
 
+        function isSearchCatalogId(id) {
+            return String(id || "").toLowerCase().includes("search");
+        }
         const ALL_CATALOGS = [...STANDARD_CATALOGS, ...TOP10_CATALOGS, ...ANIME_CATALOGS];
         const CATALOGS_BY_ID = Object.fromEntries(ALL_CATALOGS.map(catalog => [catalog.id, catalog]));
         let customCatalogDefinitions = [];
@@ -3336,7 +3339,7 @@
                 }
 
                 catalogs.push(id);
-                if (!isHome) catalogs[catalogs.length - 1] += "_d";
+                if (!isHome && !isSearchCatalogId(id)) catalogs[catalogs.length - 1] += "_d";
                 return;
             }
 
@@ -3356,7 +3359,7 @@
 
                 if (!catalogVisibility[id]) return;
                 catalogs.push(id);
-                if (!isHome) catalogs[catalogs.length - 1] += "_d";
+                if (!isHome && !isSearchCatalogId(id)) catalogs[catalogs.length - 1] += "_d";
                 return;
             }
 
@@ -3368,7 +3371,7 @@
 
             if (!getAnimeCatalogIdsForSource(selectedAnimeSource).includes(id) || !catalogVisibility[id]) return;
             catalogs.push(id);
-            if (!isHome) catalogs[catalogs.length - 1] += "_d";
+            if (!isHome && !isSearchCatalogId(id)) catalogs[catalogs.length - 1] += "_d";
         }
 
         function appendSelectedCatalogShapeKeyToConfig(key, catalogShapes) {
